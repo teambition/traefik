@@ -31,6 +31,7 @@ type Service struct {
 	LoadBalancer *ServersLoadBalancer `json:"loadBalancer,omitempty" toml:"loadBalancer,omitempty" yaml:"loadBalancer,omitempty"`
 	Weighted     *WeightedRoundRobin  `json:"weighted,omitempty" toml:"weighted,omitempty" yaml:"weighted,omitempty" label:"-"`
 	Mirroring    *Mirroring           `json:"mirroring,omitempty" toml:"mirroring,omitempty" yaml:"mirroring,omitempty" label:"-"`
+	Labeled      *LabeledRoundRobin   `json:"labeled,omitempty" toml:"labeled,omitempty" yaml:"labeled,omitempty" label:"-"`
 }
 
 // +k8s:deepcopy-gen=true
@@ -91,6 +92,16 @@ type WeightedRoundRobin struct {
 type WRRService struct {
 	Name   string `json:"name,omitempty" toml:"name,omitempty" yaml:"name,omitempty"`
 	Weight *int   `json:"weight,omitempty" toml:"weight,omitempty" yaml:"weight,omitempty"`
+}
+
+// +k8s:deepcopy-gen=true
+
+// LabeledRoundRobin defines a labeled load-balancer of services, which select service by label.
+// Label will be extract from request header or cookie, with key `X-Canary-Label`.
+// services should be named as `{defaultService}-{label}`. Ex. "myservice-stable", "myservice-beta", "myservice-dev"
+type LabeledRoundRobin struct {
+	Default  string   `json:"default,omitempty" toml:"default,omitempty" yaml:"default,omitempty"`
+	Services []string `json:"services,omitempty" toml:"services,omitempty" yaml:"services,omitempty"`
 }
 
 // SetDefaults Default values for a WRRService.
