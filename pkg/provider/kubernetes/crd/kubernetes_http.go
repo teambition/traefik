@@ -169,6 +169,8 @@ func (c configBuilder) buildTraefikService(ctx context.Context, tService *v1alph
 		return c.buildServicesLB(ctx, tService.Namespace, tService.Spec, id, conf)
 	} else if tService.Spec.Mirroring != nil {
 		return c.buildMirroring(ctx, tService, id, conf)
+	} else if tService.Spec.Labeled != nil {
+		return c.buildLabeledLB(ctx, tService.Namespace, tService.Spec, id, conf)
 	}
 
 	return errors.New("unspecified service type")
@@ -246,6 +248,41 @@ func (c configBuilder) buildMirroring(ctx context.Context, tService *v1alpha1.Tr
 		},
 	}
 
+	return nil
+}
+
+// buildLabeledLB creates the configuration for the labeled load-balancer of services named id, and defined in tService.
+// It adds it to the given conf map.
+func (c configBuilder) buildLabeledLB(ctx context.Context, namespace string, tService v1alpha1.ServiceSpec, id string, conf map[string]*dynamic.Service) error {
+	fullNameMain, k8sService, err := c.nameAndService(ctx, namespace, tService.Labeled.LoadBalancerSpec)
+	if err != nil {
+		return err
+	}
+
+	if k8sService != nil {
+		conf[fullNameMain] = k8sService
+	}
+
+	labeledServices := make([]string, len(tService.Labeled.Services))
+
+	for i, service := range tService.Labeled.Services {
+		fullName, k8sService, err := c.nameAndService(ctx, namespace, service.LoadBalancerSpec)
+		if err != nil {
+			return err
+		}
+
+		if k8sService != nil {
+			conf[fullName] = k8sService
+		}
+		labeledServices[i] = fullName
+	}
+
+	conf[id] = &dynamic.Service{
+		Labeled: &dynamic.LabeledRoundRobin{
+			Services: labeledServices,
+			Default:  fullNameMain,
+		},
+	}
 	return nil
 }
 
