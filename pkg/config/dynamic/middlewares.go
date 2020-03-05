@@ -38,6 +38,7 @@ type Middleware struct {
 	PassTLSClientCert *PassTLSClientCert `json:"passTLSClientCert,omitempty" toml:"passTLSClientCert,omitempty" yaml:"passTLSClientCert,omitempty"`
 	Retry             *Retry             `json:"retry,omitempty" toml:"retry,omitempty" yaml:"retry,omitempty"`
 	ContentType       *ContentType       `json:"contentType,omitempty" toml:"contentType,omitempty" yaml:"contentType,omitempty"`
+	Canary            *Canary            `json:"canary,omitempty" toml:"canary,omitempty" yaml:"canary,omitempty"`
 }
 
 // +k8s:deepcopy-gen=true
@@ -511,4 +512,14 @@ func (c *ClientTLS) CreateTLSConfig() (*tls.Config, error) {
 		InsecureSkipVerify: c.InsecureSkipVerify,
 		ClientAuth:         clientAuth,
 	}, nil
+}
+
+// +k8s:deepcopy-gen=true
+
+// Canary middleware settings.
+type Canary struct {
+	Product string `json:"product,omitempty" toml:"product,omitempty" yaml:"product,omitempty" export:"true"`
+	Server  string `json:"server,omitempty" toml:"server,omitempty" yaml:"server,omitempty" export:"true"`
+	Cookie  string `json:"cookie,omitempty" toml:"cookie,omitempty" yaml:"cookie,omitempty" export:"true"`
+	Expire  string `json:"expire,omitempty" toml:"expire,omitempty" yaml:"expire,omitempty" export:"true"`
 }
