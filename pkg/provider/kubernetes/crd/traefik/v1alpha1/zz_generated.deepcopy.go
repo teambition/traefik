@@ -739,6 +739,11 @@ func (in *MiddlewareSpec) DeepCopyInto(out *MiddlewareSpec) {
 		*out = new(dynamic.ContentType)
 		**out = **in
 	}
+	if in.Canary != nil {
+		in, out := &in.Canary, &out.Canary
+		*out = new(dynamic.Canary)
+		**out = **in
+	}
 	return
 }
 
