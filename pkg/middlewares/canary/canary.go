@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,16 +18,28 @@ import (
 )
 
 const (
-	labelKey = "X-Canary-Label"
-	typeName = "canary"
+	typeName                  = "canary"
+	headerAuth                = "Authorization"
+	headerUA                  = "User-Agent"
+	headerXCanary             = "X-Canary"
+	headerXRequestID          = "X-Request-ID"
+	queryAccessToken          = "access_token"
+	defaultCacheSize          = 100000
+	defaultExpiration         = time.Minute * 10
+	defaultCacheCleanDuration = time.Minute * 20
 )
+
+// Should be subset of DNS-1035 label
+// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/
+var validLabelReg = regexp.MustCompile(`^[a-z][0-9a-z-]{1,62}$`)
 
 // Canary ...
 type Canary struct {
-	name   string
-	cookie string
-	next   http.Handler
-	ls     *labelStore
+	name         string
+	cookie       string
+	addRequestID bool
+	next         http.Handler
+	ls           *labelStore
 }
 
 // New returns a Canary instance.
@@ -41,16 +54,21 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 		return nil, fmt.Errorf("canary label server required for Canary middleware")
 	}
 
-	expire, err := time.ParseDuration(cfg.Expire)
-	if err != nil {
-		return nil, fmt.Errorf("invalid expire for Canary middleware")
+	expiration := time.Duration(cfg.CacheExpiration)
+	if expiration < time.Minute {
+		expiration = defaultExpiration
 	}
-	if expire < time.Minute {
-		expire = time.Minute
+	cacheCleanDuration := time.Duration(cfg.CacheCleanDuration)
+	if cacheCleanDuration < time.Minute {
+		cacheCleanDuration = defaultCacheCleanDuration
 	}
 
-	ls := newLabelStore(cfg, logger, expire)
-	return &Canary{name: name, cookie: cfg.Cookie, next: next, ls: ls}, nil
+	if cfg.MaxCacheSize < 10 {
+		cfg.MaxCacheSize = defaultCacheSize
+	}
+
+	ls := newLabelStore(cfg, logger, expiration, cacheCleanDuration)
+	return &Canary{name: name, cookie: cfg.Cookie, addRequestID: cfg.AddRequestID, next: next, ls: ls}, nil
 }
 
 // GetTracingInformation implements Tracable interface
@@ -64,26 +82,48 @@ func (c *Canary) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// userAgent:"Android/9 (OPPO PBET00;zh_CN) App/5.0.5 AliApp(DingTalk/5.0.5) com.alibaba.android.rimet/12726948 Channel/263200 language/zh-CN"
 	// ua := uasurfer.Parse(req.Header.Get("User-Agent"))
 
-	label := ""
-	if uid := c.extractUserID(req); uid != "" {
-		labels := c.ls.mustLoad(req.Context(), uid, req.Header)
-		if len(labels) > 0 {
-			label = labels[0].Label
+	if c.addRequestID {
+		addRequestID(req)
+	}
+
+	if label := req.Header.Get(headerXCanary); label == "" {
+		if cookie, _ := req.Cookie(headerXCanary); cookie != nil {
+			label = cookie.Value
+		}
+
+		if label != "" && !validLabelReg.MatchString(label) {
+			label = ""
+		}
+
+		uid := c.extractUserID(req)
+		if label == "" && uid != "" {
+			labels := c.ls.mustLoad(req.Context(), uid, req.Header)
+			if len(labels) > 0 {
+				label = labels[0].Label
+			}
+		}
+
+		if label != "" {
+			req.Header.Set(headerXCanary, fmt.Sprintf("label=%s", label))
+			req.Header.Add(headerXCanary, fmt.Sprintf("product=%s", c.ls.product))
+			if uid != "" {
+				req.Header.Add(headerXCanary, fmt.Sprintf("uid=%s", uid))
+			}
 		}
 	}
-	req.Header.Set("labelKey", label)
+
 	c.next.ServeHTTP(rw, req)
 }
 
 func (c *Canary) extractUserID(req *http.Request) string {
-	jwToken := req.Header.Get("Authorization")
+	jwToken := req.Header.Get(headerAuth)
 	if jwToken != "" {
 		if strs := strings.Split(jwToken, " "); len(strs) == 2 {
 			jwToken = strs[1]
 		}
 	}
 	if jwToken == "" {
-		jwToken = req.URL.Query().Get("access_token")
+		jwToken = req.URL.Query().Get(queryAccessToken)
 	}
 	if jwToken != "" {
 		if strs := strings.Split(jwToken, "."); len(strs) == 3 {
