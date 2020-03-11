@@ -55,15 +55,14 @@ func getUserLabels(ctx context.Context, url, xRequestID string) (*labelsRes, err
 		sp = span
 		defer finish()
 
-		span.SetTag("http.host", re.Host)
-		span.SetTag("x.request.id", xRequestID)
+		span.SetTag(headerXRequestID, xRequestID)
 		ext.HTTPUrl.Set(span, re.URL.String())
 		tracing.InjectRequestHeaders(re)
 		req = re
 	}
 
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("X-Request-ID", xRequestID)
+	req.Header.Set(headerUA, userAgent)
+	req.Header.Set(headerXRequestID, xRequestID)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
