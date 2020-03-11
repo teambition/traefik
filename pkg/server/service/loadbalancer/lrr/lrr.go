@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-const labelKey = "X-Canary-Label"
+const labelKey = "X-Canary"
 
-var isDigitsReg = regexp.MustCompile(`^\d+$`)
+var isPortReg = regexp.MustCompile(`^\d+$`)
 
 type namedHandler struct {
 	http.Handler
@@ -29,15 +29,14 @@ type Balancer struct {
 }
 
 func (b *Balancer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// X-Canary: beta
+	// X-Canary: label=beta; uid=5c4057f0be825b390667abee; ...
 	label := req.Header.Get(labelKey)
-	name := b.serviceName
-
-	if label == "" {
-		if cookie, _ := req.Cookie(labelKey); cookie != nil {
-			label = cookie.Value
-		}
+	if label != "" && strings.HasPrefix(label, "label=") {
+		label = label[6:]
 	}
 
+	name := b.serviceName
 	if label != "" {
 		name = fmt.Sprintf("%s-%s", name, label)
 		for _, handler := range b.handlers {
@@ -69,7 +68,7 @@ func removeNsPort(fullServiceName string) string {
 	if len(strs) > 1 {
 		strs = strs[1:] // remove namespace
 	}
-	if len(strs) > 1 && isDigitsReg.MatchString(strs[len(strs)-1]) {
+	if len(strs) > 1 && isPortReg.MatchString(strs[len(strs)-1]) {
 		strs = strs[:len(strs)-1] // remove port
 	}
 	return strings.Join(strs, "-")
