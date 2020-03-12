@@ -279,8 +279,9 @@ func (c configBuilder) buildLabeledLB(ctx context.Context, namespace string, tSe
 
 	conf[id] = &dynamic.Service{
 		Labeled: &dynamic.LabeledRoundRobin{
-			Services: labeledServices,
-			Default:  fullNameMain,
+			ServiceName: tService.Labeled.LoadBalancerSpec.Name,
+			Default:     fullNameMain,
+			Services:    labeledServices,
 		},
 	}
 	return nil
