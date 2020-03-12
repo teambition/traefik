@@ -100,8 +100,9 @@ type WRRService struct {
 // Label will be extract from request header or cookie, with key `X-Canary-Label`.
 // services should be named as `{defaultService}-{label}`. Ex. "myservice-stable", "myservice-beta", "myservice-dev"
 type LabeledRoundRobin struct {
-	Default  string   `json:"default,omitempty" toml:"default,omitempty" yaml:"default,omitempty"`
-	Services []string `json:"services,omitempty" toml:"services,omitempty" yaml:"services,omitempty"`
+	ServiceName string   `json:"serviceName,omitempty" toml:"serviceName,omitempty" yaml:"serviceName,omitempty"`
+	Default     string   `json:"default,omitempty" toml:"default,omitempty" yaml:"default,omitempty"`
+	Services    []string `json:"services,omitempty" toml:"services,omitempty" yaml:"services,omitempty"`
 }
 
 // SetDefaults Default values for a WRRService.

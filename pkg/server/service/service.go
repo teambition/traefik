@@ -181,14 +181,14 @@ func (m *Manager) getLRRServiceHandler(ctx context.Context, serviceName string, 
 		return nil, err
 	}
 
-	balancer := lrr.New(config.Default, defaultHandler)
-	for _, serviceName := range config.Services {
-		serviceHandler, err := m.BuildHTTP(ctx, serviceName, responseModifier)
+	balancer := lrr.New(config.ServiceName, defaultHandler)
+	for _, fullServiceName := range config.Services {
+		serviceHandler, err := m.BuildHTTP(ctx, fullServiceName, responseModifier)
 		if err != nil {
 			return nil, err
 		}
 
-		balancer.AddService(serviceName, serviceHandler)
+		balancer.AddService(fullServiceName, serviceHandler)
 	}
 	return balancer, nil
 }
