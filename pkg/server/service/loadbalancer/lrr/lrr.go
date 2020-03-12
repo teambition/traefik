@@ -18,7 +18,7 @@ type namedHandler struct {
 
 // New creates a new load balancer.
 func New(defaultServiceName string, handler http.Handler) *Balancer {
-	return &Balancer{serviceName: removeNsPort(defaultServiceName), defaultHandler: handler}
+	return &Balancer{serviceName: defaultServiceName, defaultHandler: handler}
 }
 
 // Balancer is a labeled load-balancer of services, which select service by label.
@@ -57,19 +57,16 @@ func (b *Balancer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 // AddService adds a handler.
 // It is not thread safe with ServeHTTP.
-func (b *Balancer) AddService(name string, handler http.Handler) {
-	h := &namedHandler{Handler: handler, name: removeNsPort(name)}
+func (b *Balancer) AddService(fullServiceName string, handler http.Handler) {
+	h := &namedHandler{Handler: handler, name: removeNsPort(fullServiceName, b.serviceName)}
 	b.handlers = append(b.handlers, h)
 }
 
 // full service name format (build by fullServiceName function): namespace-serviceName-port
-func removeNsPort(fullServiceName string) string {
-	strs := strings.Split(fullServiceName, "-")
-	if len(strs) > 1 {
-		strs = strs[1:] // remove namespace
+func removeNsPort(fullServiceName, ServiceName string) string {
+	i := strings.Index(fullServiceName, ServiceName)
+	if i > 0 {
+		fullServiceName = fullServiceName[i:] // remove namespace
 	}
-	if len(strs) > 1 && isPortReg.MatchString(strs[len(strs)-1]) {
-		strs = strs[:len(strs)-1] // remove port
-	}
-	return strings.Join(strs, "-")
+	return strings.TrimRight(fullServiceName, "0123456789-") // remove port
 }

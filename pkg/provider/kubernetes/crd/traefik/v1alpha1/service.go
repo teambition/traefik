@@ -71,6 +71,6 @@ type WeightedRoundRobin struct {
 // Label will be extract from request header or cookie, with key `X-Canary-Label`.
 // services should be named as `{defaultService}-{label}`. Ex. "myservice-stable", "myservice-beta", "myservice-dev"
 type LabeledRoundRobin struct {
-	LoadBalancerSpec
+	Service
 	Services []Service `json:"services,omitempty"`
 }
