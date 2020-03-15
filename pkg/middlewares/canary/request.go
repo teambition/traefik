@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/containous/traefik/v2/pkg/log"
 	"github.com/containous/traefik/v2/pkg/tracing"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
@@ -38,7 +39,7 @@ var client = &http.Client{
 
 type labelsRes struct {
 	Timestamp int64   `json:"timestamp"` // []label 构建时间，Unix seconds
-	Result    []label `json:"result"`    // 空数组也保留
+	Result    []Label `json:"result"`    // 空数组也保留
 }
 
 func getUserLabels(ctx context.Context, url, xRequestID string) (*labelsRes, error) {
@@ -84,4 +85,17 @@ func getUserLabels(ctx context.Context, url, xRequestID string) (*labelsRes, err
 	}
 
 	return res, nil
+}
+
+// MustGetUserLabels returns labels and timestamp
+func MustGetUserLabels(ctx context.Context, url, xRequestID string, logger log.Logger) ([]Label, int64) {
+	res, err := getUserLabels(ctx, url, xRequestID)
+	now := time.Now().UTC().Unix()
+	if res == nil || res.Result == nil {
+		res = &labelsRes{Result: []Label{}, Timestamp: now}
+		logger.Error(err)
+	} else if res.Timestamp > now || res.Timestamp <= 0 {
+		res.Timestamp = now
+	}
+	return res.Result, res.Timestamp
 }

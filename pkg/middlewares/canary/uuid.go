@@ -3,16 +3,7 @@ package canary
 import (
 	"encoding/hex"
 	"math/rand"
-	"net/http"
 )
-
-func addRequestID(req *http.Request) {
-	requestID := req.Header.Get(headerXRequestID)
-	if requestID == "" {
-		requestID = generator()
-		req.Header.Set(headerXRequestID, requestID)
-	}
-}
 
 // uuid version 4
 type uuidv4 [16]byte

@@ -36,10 +36,11 @@ var validLabelReg = regexp.MustCompile(`^[a-z][0-9a-z-]{1,62}$`)
 // Canary ...
 type Canary struct {
 	name         string
+	product      string
 	cookie       string
 	addRequestID bool
+	ls           *LabelStore
 	next         http.Handler
-	ls           *labelStore
 }
 
 // New returns a Canary instance.
@@ -67,8 +68,9 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 		cfg.MaxCacheSize = defaultCacheSize
 	}
 
-	ls := newLabelStore(cfg, logger, expiration, cacheCleanDuration)
-	return &Canary{name: name, cookie: cfg.Cookie, addRequestID: cfg.AddRequestID, next: next, ls: ls}, nil
+	ls := NewLabelStore(logger, cfg, expiration, cacheCleanDuration)
+	return &Canary{name: name, product: cfg.Product,
+		cookie: cfg.Cookie, addRequestID: cfg.AddRequestID, ls: ls, next: next}, nil
 }
 
 // GetTracingInformation implements Tracable interface
@@ -77,45 +79,55 @@ func (c *Canary) GetTracingInformation() (string, ext.SpanKindEnum) {
 }
 
 func (c *Canary) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	// TODO Client and Channel
-	// userAgent:"Teambition/11.2.1 (iPhone; iOS 13.3.1)"
-	// userAgent:"Android/9 (OPPO PBET00;zh_CN) App/5.0.5 AliApp(DingTalk/5.0.5) com.alibaba.android.rimet/12726948 Channel/263200 language/zh-CN"
-	// ua := uasurfer.Parse(req.Header.Get("User-Agent"))
-
-	if c.addRequestID {
-		addRequestID(req)
-	}
-
-	if label := req.Header.Get(headerXCanary); label == "" {
-		if cookie, _ := req.Cookie(headerXCanary); cookie != nil {
-			label = cookie.Value
-		}
-
-		if label != "" && !validLabelReg.MatchString(label) {
-			label = ""
-		}
-
-		uid := c.extractUserID(req)
-		if label == "" && uid != "" {
-			labels := c.ls.mustLoad(req.Context(), uid, req.Header)
-			if len(labels) > 0 {
-				label = labels[0].Label
-			}
-		}
-
-		if label != "" {
-			req.Header.Set(headerXCanary, fmt.Sprintf("label=%s", label))
-			req.Header.Add(headerXCanary, fmt.Sprintf("product=%s", c.ls.product))
-			if uid != "" {
-				req.Header.Add(headerXCanary, fmt.Sprintf("uid=%s", uid))
-			}
-		}
-	}
-
+	c.processRequestID(req)
+	c.processCanary(req)
 	c.next.ServeHTTP(rw, req)
 }
 
-func (c *Canary) extractUserID(req *http.Request) string {
+func (c *Canary) processRequestID(req *http.Request) {
+	if c.addRequestID {
+		requestID := req.Header.Get(headerXRequestID)
+		if requestID == "" {
+			requestID = generator()
+			req.Header.Set(headerXRequestID, requestID)
+		}
+	}
+}
+
+func (c *Canary) processCanary(req *http.Request) {
+	info := &canaryHeader{}
+	info.fromHeader(req.Header, false)
+
+	if info.label == "" {
+		if cookie, _ := req.Cookie(headerXCanary); cookie != nil && validLabelReg.MatchString(cookie.Value) {
+			info.label = cookie.Value
+		}
+	}
+
+	info.product = c.product
+	info.uid = extractUserID(req, c.cookie)
+
+	if info.label == "" && info.uid != "" {
+		labels := c.ls.MustLoadLabels(req.Context(), info.uid, req.Header.Get(headerXRequestID))
+		for _, l := range labels {
+			if info.client != "" && !l.MatchClient(info.client) {
+				continue
+			}
+			if info.channel != "" && !l.MatchChannel(info.channel) {
+				continue
+			}
+			info.label = l.Label
+			break
+		}
+	}
+	info.intoHeader(req.Header)
+}
+
+type userInfo struct {
+	UID string `json:"uid"`
+}
+
+func extractUserID(req *http.Request, cookieName string) string {
 	jwToken := req.Header.Get(headerAuth)
 	if jwToken != "" {
 		if strs := strings.Split(jwToken, " "); len(strs) == 2 {
@@ -129,28 +141,94 @@ func (c *Canary) extractUserID(req *http.Request) string {
 		if strs := strings.Split(jwToken, "."); len(strs) == 3 {
 			return extractUserIDFromBase64(strs[1])
 		}
-	} else if c.cookie != "" {
-		if cookie, _ := req.Cookie(c.cookie); cookie != nil {
+	} else if cookieName != "" {
+		if cookie, _ := req.Cookie(cookieName); cookie != nil {
 			return extractUserIDFromBase64(cookie.Value)
 		}
 	}
 	return ""
 }
 
-type userInfo struct {
-	UID string `json:"uid"`
-}
-
 func extractUserIDFromBase64(s string) string {
-	b, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		b, err = base64.URLEncoding.DecodeString(s)
+	if i := strings.IndexRune(s, '='); i > 0 {
+		s = s[:i] // remove padding
 	}
-	if err == nil {
+	var b []byte
+	var err error
+	if strings.ContainsAny(s, "+/") {
+		b, err = base64.RawStdEncoding.DecodeString(s)
+	} else {
+		b, err = base64.RawURLEncoding.DecodeString(s)
+	}
+
+	if len(b) > 0 {
 		user := &userInfo{}
 		if err = json.Unmarshal(b, user); err == nil {
 			return user.UID
 		}
 	}
 	return ""
+}
+
+type canaryHeader struct {
+	label   string
+	product string
+	uid     string
+	client  string
+	channel string
+	app     string
+	version string
+}
+
+// uid and product will not be extracted
+func (ch *canaryHeader) fromHeader(header http.Header, trust bool) {
+	vals := header.Values(headerXCanary)
+	for _, v := range vals {
+		switch {
+		case strings.HasPrefix(v, "label="):
+			ch.label = v[6:]
+		case trust && strings.HasPrefix(v, "product="):
+			ch.product = v[8:]
+		case trust && strings.HasPrefix(v, "uid="):
+			ch.uid = v[4:]
+		case strings.HasPrefix(v, "client="):
+			ch.client = v[7:]
+		case strings.HasPrefix(v, "channel="):
+			ch.channel = v[8:]
+		case strings.HasPrefix(v, "app="):
+			ch.app = v[4:]
+		case strings.HasPrefix(v, "version="):
+			ch.version = v[8:]
+		default:
+			if len(vals) == 1 && validLabelReg.MatchString(v) {
+				ch.label = v
+			}
+		}
+	}
+}
+
+// label should not be empty
+func (ch *canaryHeader) intoHeader(header http.Header) {
+	if ch.label == "" {
+		return
+	}
+	header.Set(headerXCanary, fmt.Sprintf("label=%s", ch.label))
+	if ch.product != "" {
+		header.Add(headerXCanary, fmt.Sprintf("product=%s", ch.product))
+	}
+	if ch.uid != "" {
+		header.Add(headerXCanary, fmt.Sprintf("uid=%s", ch.uid))
+	}
+	if ch.client != "" {
+		header.Add(headerXCanary, fmt.Sprintf("client=%s", ch.client))
+	}
+	if ch.channel != "" {
+		header.Add(headerXCanary, fmt.Sprintf("channel=%s", ch.channel))
+	}
+	if ch.app != "" {
+		header.Add(headerXCanary, fmt.Sprintf("app=%s", ch.app))
+	}
+	if ch.version != "" {
+		header.Add(headerXCanary, fmt.Sprintf("version=%s", ch.version))
+	}
 }
