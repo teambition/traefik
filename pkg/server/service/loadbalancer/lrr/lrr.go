@@ -30,7 +30,7 @@ type Balancer struct {
 
 func (b *Balancer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// X-Canary: beta
-	// X-Canary: label=beta; uid=5c4057f0be825b390667abee; ...
+	// X-Canary: label=beta; product=urbs; uid=5c4057f0be825b390667abee; ...
 	label := req.Header.Get(labelKey)
 	if label != "" && strings.HasPrefix(label, "label=") {
 		label = label[6:]

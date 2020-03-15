@@ -3,7 +3,6 @@ package canary
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -11,70 +10,122 @@ import (
 	"github.com/containous/traefik/v2/pkg/log"
 )
 
-type labelStore struct {
-	product            string
-	server             string
+// LabelStore ...
+type LabelStore struct {
 	logger             log.Logger
-	mu                 sync.Mutex
+	mu                 sync.RWMutex
 	expiration         time.Duration
 	cacheCleanDuration time.Duration
-	maxCacheSize       int
 	shouldRound        time.Time
+	maxCacheSize       int
 	liveMap            map[string]*entry
 	staleMap           map[string]*entry
+	mustFetchLabels    func(ctx context.Context, uid, requestID string) (labels []Label, timestamp int64)
 }
 
 type entry struct {
 	mu       sync.Mutex
-	value    []label
+	value    []Label
 	expireAt time.Time
 }
 
-type label struct {
-	Label    string `json:"l"`
-	Clients  string `json:"cls,omitempty"`
-	Channels string `json:"chs,omitempty"`
+// Label ...
+type Label struct {
+	Label    string   `json:"l"`
+	Clients  []string `json:"cls,omitempty"`
+	Channels []string `json:"chs,omitempty"`
 }
 
-func newLabelStore(cfg dynamic.Canary, logger log.Logger, expiration time.Duration, cacheCleanDuration time.Duration) *labelStore {
-	return &labelStore{
-		expiration:         expiration,
+// MatchClient ...
+func (l *Label) MatchClient(client string) bool {
+	if len(l.Clients) == 0 {
+		return true
+	}
+	for _, c := range l.Clients {
+		if c == client {
+			return true
+		}
+	}
+	return false
+}
+
+// MatchChannel ...
+func (l *Label) MatchChannel(channel string) bool {
+	if len(l.Channels) == 0 {
+		return true
+	}
+	for _, c := range l.Channels {
+		if c == channel {
+			return true
+		}
+	}
+	return false
+}
+
+// NewLabelStore ...
+func NewLabelStore(logger log.Logger, cfg dynamic.Canary, expiration, cacheCleanDuration time.Duration) *LabelStore {
+	ls := &LabelStore{
 		logger:             logger,
-		product:            cfg.Product,
-		server:             cfg.Server,
 		maxCacheSize:       cfg.MaxCacheSize,
+		expiration:         expiration,
 		cacheCleanDuration: cacheCleanDuration,
 		shouldRound:        time.Now().UTC().Add(cacheCleanDuration),
 		liveMap:            make(map[string]*entry),
 		staleMap:           make(map[string]*entry),
 	}
+
+	product := cfg.Product
+	apiURL := cfg.Server
+	if apiURL[len(apiURL)-1] == '/' {
+		apiURL = apiURL[:len(apiURL)-1]
+	}
+	apiURL += "/users/%s/labels:cache?product=%s"
+
+	ls.mustFetchLabels = func(ctx context.Context, uid, requestID string) ([]Label, int64) {
+		url := fmt.Sprintf(apiURL, uid, product)
+		return MustGetUserLabels(ctx, url, requestID, logger)
+	}
+	return ls
 }
 
-func (s *labelStore) mustLoad(ctx context.Context, uid string, header http.Header) []label {
+// MustLoadLabels ...
+func (s *LabelStore) MustLoadLabels(ctx context.Context, uid, requestID string) []Label {
 	now := time.Now().UTC()
-	e := s.mustLoadEntity(uid, now)
+	e := s.mustLoadEntry(uid, now)
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.value == nil || e.expireAt.Before(now) {
-		res := s.fetch(ctx, uid, header)
-		e.value = res.Result
-		e.expireAt = time.Unix(res.Timestamp, 0).UTC().Add(s.expiration)
+		labels, ts := s.mustFetchLabels(ctx, uid, requestID)
+		e.value = labels
+		e.expireAt = time.Unix(ts, 0).Add(s.expiration)
 	}
 
 	return e.value
 }
 
-func (s *labelStore) mustLoadEntity(key string, now time.Time) *entry {
+func (s *LabelStore) mustLoadEntry(key string, now time.Time) *entry {
+	s.mu.RLock()
+	e, ok := s.liveMap[key]
+	s.mu.RUnlock()
+	if ok && len(s.liveMap) <= s.maxCacheSize {
+		return e
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	e, ok := s.liveMap[key]
+	e, ok = s.liveMap[key]
 	if !ok {
 		if e, ok = s.staleMap[key]; ok && e != nil {
-			s.liveMap[key] = e // move entity from staleMap to liveMap
+			s.liveMap[key] = e // move entry from staleMap to liveMap
 			s.staleMap[key] = nil
 		}
+	}
+
+	if !ok {
+		e = &entry{}
+		s.liveMap[key] = e
 	}
 
 	if len(s.liveMap) > s.maxCacheSize || s.shouldRound.Before(now) {
@@ -84,23 +135,5 @@ func (s *labelStore) mustLoadEntity(key string, now time.Time) *entry {
 		s.staleMap = s.liveMap
 		s.liveMap = make(map[string]*entry, len(s.staleMap)/2)
 	}
-
-	if !ok {
-		e = &entry{}
-		s.liveMap[key] = e
-	}
 	return e
-}
-
-func (s *labelStore) fetch(ctx context.Context, uid string, header http.Header) *labelsRes {
-	url := fmt.Sprintf("%s/users/%s/labels:cache?product=%s", s.server, uid, s.product)
-	res, err := getUserLabels(ctx, url, header.Get("X-Request-ID"))
-	now := time.Now().UTC().Unix()
-	if err != nil {
-		res = &labelsRes{Result: []label{}, Timestamp: now}
-		s.logger.Error(err)
-	} else if res.Timestamp > now {
-		res.Timestamp = now
-	}
-	return res
 }
