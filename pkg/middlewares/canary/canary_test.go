@@ -175,52 +175,75 @@ func TestCanary(t *testing.T) {
 		a.Nil(err)
 
 		req := httptest.NewRequest("GET", "http://example.com/foo", nil)
-		c.processCanary(req)
+		rw := httptest.NewRecorder()
+		c.processCanary(rw, req)
 		ch := &canaryHeader{}
 		ch.fromHeader(req.Header, true)
 		a.Equal("", ch.label)
 
 		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
+		rw = httptest.NewRecorder()
 		req.Header.Set(headerXCanary, "stable")
-		c.processCanary(req)
+		c.processCanary(rw, req)
 		ch = &canaryHeader{}
 		ch.fromHeader(req.Header, true)
 		a.Equal("stable", ch.label)
 		a.Equal("Urbs", ch.product)
 
 		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
+		rw = httptest.NewRecorder()
 		req.Header.Set(headerXCanary, "label=beta")
-		c.processCanary(req)
+		c.processCanary(rw, req)
 		ch = &canaryHeader{}
 		ch.fromHeader(req.Header, true)
 		a.Equal("beta", ch.label)
 		a.Equal("Urbs", ch.product)
 
 		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
+		rw = httptest.NewRecorder()
 		req.AddCookie(&http.Cookie{Name: headerXCanary, Value: "beta"})
-		c.processCanary(req)
+		c.processCanary(rw, req)
 		ch = &canaryHeader{}
 		ch.fromHeader(req.Header, true)
 		a.Equal("beta", ch.label)
 		a.Equal("Urbs", ch.product)
+		ch = &canaryHeader{}
+		ch.fromHeader(rw.Header(), true)
+		a.Equal("", ch.label)
+		a.Equal("", ch.product)
+
+		c.canaryResponseHeader = true
 
 		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
+		rw = httptest.NewRecorder()
 		req.Header.Set(headerXCanary, "label=beta")
 		req.Header.Add(headerXCanary, "client=iOS")
 		req.AddCookie(&http.Cookie{Name: headerXCanary, Value: "stable"})
-		c.processCanary(req)
+		c.processCanary(rw, req)
 		ch = &canaryHeader{}
 		ch.fromHeader(req.Header, true)
 		a.Equal("beta", ch.label)
 		a.Equal("Urbs", ch.product)
 		a.Equal("iOS", ch.client)
+		ch = &canaryHeader{}
+		ch.fromHeader(rw.Header(), true)
+		a.Equal("beta", ch.label)
+		a.Equal("Urbs", ch.product)
+		a.Equal("iOS", ch.client)
 
 		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
+		rw = httptest.NewRecorder()
 		req.Header.Set("Authorization", fmt.Sprintf("OAuth %s", testToken))
 		req.Header.Set(headerXCanary, "client=iOS")
-		c.processCanary(req)
+		c.processCanary(rw, req)
 		ch = &canaryHeader{}
 		ch.fromHeader(req.Header, true)
+		a.Equal("someuid", ch.label)
+		a.Equal("Urbs", ch.product)
+		a.Equal("iOS", ch.client)
+		a.Equal("someuid", ch.uid)
+		ch = &canaryHeader{}
+		ch.fromHeader(rw.Header(), true)
 		a.Equal("someuid", ch.label)
 		a.Equal("Urbs", ch.product)
 		a.Equal("iOS", ch.client)
