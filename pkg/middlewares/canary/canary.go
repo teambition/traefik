@@ -35,12 +35,13 @@ var validLabelReg = regexp.MustCompile(`^[a-z][0-9a-z-]{1,62}$`)
 
 // Canary ...
 type Canary struct {
-	name         string
-	product      string
-	cookie       string
-	addRequestID bool
-	ls           *LabelStore
-	next         http.Handler
+	name                 string
+	product              string
+	cookie               string
+	addRequestID         bool
+	canaryResponseHeader bool
+	ls                   *LabelStore
+	next                 http.Handler
 }
 
 // New returns a Canary instance.
@@ -69,8 +70,8 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 	}
 
 	ls := NewLabelStore(logger, cfg, expiration, cacheCleanDuration)
-	return &Canary{name: name, product: cfg.Product,
-		cookie: cfg.Cookie, addRequestID: cfg.AddRequestID, ls: ls, next: next}, nil
+	return &Canary{name: name, product: cfg.Product, cookie: cfg.Cookie,
+		addRequestID: cfg.AddRequestID, canaryResponseHeader: cfg.CanaryResponseHeader, ls: ls, next: next}, nil
 }
 
 // GetTracingInformation implements Tracable interface
@@ -80,7 +81,7 @@ func (c *Canary) GetTracingInformation() (string, ext.SpanKindEnum) {
 
 func (c *Canary) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	c.processRequestID(req)
-	c.processCanary(req)
+	c.processCanary(rw, req)
 	c.next.ServeHTTP(rw, req)
 }
 
@@ -94,7 +95,7 @@ func (c *Canary) processRequestID(req *http.Request) {
 	}
 }
 
-func (c *Canary) processCanary(req *http.Request) {
+func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 	info := &canaryHeader{}
 	info.fromHeader(req.Header, false)
 
@@ -121,6 +122,9 @@ func (c *Canary) processCanary(req *http.Request) {
 		}
 	}
 	info.intoHeader(req.Header)
+	if c.canaryResponseHeader {
+		info.intoHeader(rw.Header())
+	}
 }
 
 type userInfo struct {

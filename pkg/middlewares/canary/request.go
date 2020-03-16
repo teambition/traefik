@@ -13,6 +13,7 @@ import (
 
 	"github.com/containous/traefik/v2/pkg/log"
 	"github.com/containous/traefik/v2/pkg/tracing"
+	"github.com/containous/traefik/v2/pkg/version"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 )
@@ -22,7 +23,7 @@ func init() {
 	if hostname == "" {
 		hostname = "unknown"
 	}
-	userAgent = fmt.Sprintf("golang/%v hostname/%s Traefik Canary Middleware", runtime.Version(), hostname)
+	userAgent = fmt.Sprintf("Go/%v Hostname/%s Traefik/%s (Canary Middleware)", runtime.Version(), hostname, version.Version)
 }
 
 var userAgent string
