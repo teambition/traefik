@@ -3,6 +3,7 @@ package canary
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,10 +77,13 @@ func NewLabelStore(logger log.Logger, cfg dynamic.Canary, expiration, cacheClean
 
 	product := cfg.Product
 	apiURL := cfg.Server
-	if apiURL[len(apiURL)-1] == '/' {
-		apiURL = apiURL[:len(apiURL)-1]
+	// apiURL ex. https://labelServerHost/api/labels?uid=%s&product=%s
+	if !strings.Contains(apiURL, "%s") { // append default API path.
+		if apiURL[len(apiURL)-1] == '/' {
+			apiURL = apiURL[:len(apiURL)-1]
+		}
+		apiURL += "/users/%s/labels:cache?product=%s"
 	}
-	apiURL += "/users/%s/labels:cache?product=%s"
 
 	ls.mustFetchLabels = func(ctx context.Context, uid, requestID string) ([]Label, int64) {
 		url := fmt.Sprintf(apiURL, uid, product)
