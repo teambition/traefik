@@ -14,6 +14,8 @@ import (
 
 const testCookie = `eyJ1aWQiOiJzb21ldWlkIiwidXNlciI6eyJfaWQiOiJzb21ldWlkIiwibmFtZSI6InRlc3RlciJ9fQ==`
 const testToken = `eyJhbGciOiJIUzI1NiJ9.eyJ1aWQiOiJzb21ldWlkIiwidXNlciI6eyJfaWQiOiJzb21ldWlkIiwibmFtZSI6InRlc3RlciJ9fQ.qPVxAAzpRFky08W6-0O5RZWZOeg1xO5CZkmPJZkklqQ`
+const testToken2 = `eyJhbGciOiJIUzI1NiJ9.eyJpZCI6InNvbWVpZCIsInVzZXIiOnsiaWQiOiJzb21laWQiLCJuYW1lIjoidGVzdGVyIn19.hkr5mZceCWUHSOOHGbt-f1G9c_FrnATiX4ukGVArHJc`
+const testToken3 = `eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzb21ldXNlciIsInVzZXIiOnsiaWQiOiJzb21ldXNlciIsIm5hbWUiOiJ0ZXN0ZXIifX0.kzVL_dF5BU_sPnsBE-FeXqaL2bR5nnPbNpvDkRm0pOU`
 
 func TestCanaryHeader(t *testing.T) {
 	t.Run("fromHeader should work", func(t *testing.T) {
@@ -107,40 +109,38 @@ func TestExtractUserID(t *testing.T) {
 	t.Run("fromHeader should work", func(t *testing.T) {
 		a := assert.New(t)
 		req := httptest.NewRequest("GET", "http://example.com/foo", nil)
-		uid := extractUserID(req, "SESS")
+		uid := extractUserID(req, []string{"SESS"})
 		a.Equal("", uid)
 
 		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
 		req.AddCookie(&http.Cookie{Name: "SESS", Value: testCookie})
-		uid = extractUserID(req, "SESS")
+		uid = extractUserID(req, []string{"SESS"})
 		a.Equal("someuid", uid)
 
 		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
+		req.AddCookie(&http.Cookie{Name: "SESS", Value: ""})
+		req.AddCookie(&http.Cookie{Name: "TOKEN", Value: testToken2})
+		uid = extractUserID(req, []string{"SESS", "TOKEN"})
+		a.Equal("someid", uid)
+
+		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
 		req.AddCookie(&http.Cookie{Name: "SESS", Value: testCookie[5:]})
-		uid = extractUserID(req, "SESS")
-		a.Equal("", uid)
-
-		req = httptest.NewRequest("GET", fmt.Sprintf("http://example.com/foo?access_token=%s", testToken), nil)
-		uid = extractUserID(req, "")
-		a.Equal("someuid", uid)
-
-		req = httptest.NewRequest("GET", fmt.Sprintf("http://example.com/foo?access_token=%s", testToken[32:]), nil)
-		uid = extractUserID(req, "")
+		uid = extractUserID(req, []string{"SESS"})
 		a.Equal("", uid)
 
 		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", testToken))
-		uid = extractUserID(req, "")
+		uid = extractUserID(req, []string{})
 		a.Equal("someuid", uid)
 
 		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
-		req.Header.Set("Authorization", fmt.Sprintf("OAuth %s", testToken))
-		uid = extractUserID(req, "")
-		a.Equal("someuid", uid)
+		req.Header.Set("Authorization", fmt.Sprintf("OAuth %s", testToken3))
+		uid = extractUserID(req, []string{})
+		a.Equal("someuser", uid)
 
 		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", testToken[30:]))
-		uid = extractUserID(req, "")
+		uid = extractUserID(req, []string{})
 		a.Equal("", uid)
 	})
 }
@@ -156,12 +156,14 @@ func TestCanary(t *testing.T) {
 
 		a.Nil(err)
 		req := httptest.NewRequest("GET", "http://example.com/foo", nil)
-		c.processRequestID(req)
+		rw := httptest.NewRecorder()
+		c.processRequestID(rw, req)
 		requestID := req.Header.Get(headerXRequestID)
 		a.NotEqual("", requestID)
 
-		c.processRequestID(req)
+		c.processRequestID(rw, req)
 		a.Equal(requestID, req.Header.Get(headerXRequestID))
+		a.Equal(requestID, rw.Header().Get(headerXRequestID))
 	})
 
 	t.Run("processCanary should work", func(t *testing.T) {
