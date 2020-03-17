@@ -742,7 +742,7 @@ func (in *MiddlewareSpec) DeepCopyInto(out *MiddlewareSpec) {
 	if in.Canary != nil {
 		in, out := &in.Canary, &out.Canary
 		*out = new(dynamic.Canary)
-		**out = **in
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }

@@ -520,7 +520,7 @@ func (c *ClientTLS) CreateTLSConfig() (*tls.Config, error) {
 type Canary struct {
 	Product              string         `json:"product,omitempty" toml:"product,omitempty" yaml:"product,omitempty" export:"true"`
 	Server               string         `json:"server,omitempty" toml:"server,omitempty" yaml:"server,omitempty" export:"true"`
-	Cookie               string         `json:"cookie,omitempty" toml:"cookie,omitempty" yaml:"cookie,omitempty" export:"true"`
+	UIDCookies           []string       `json:"uidCookies,omitempty" toml:"uidCookies,omitempty" yaml:"uidCookies,omitempty" export:"true"`
 	AddRequestID         bool           `json:"addRequestID,omitempty" toml:"addRequestID,omitempty" yaml:"addRequestID,omitempty" export:"true"`
 	CanaryResponseHeader bool           `json:"canaryResponseHeader,omitempty" toml:"canaryResponseHeader,omitempty" yaml:"canaryResponseHeader,omitempty" export:"true"`
 	MaxCacheSize         int            `json:"maxCacheSize,omitempty" toml:"maxCacheSize,omitempty" yaml:"maxCacheSize,omitempty" export:"true"`

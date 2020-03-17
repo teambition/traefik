@@ -23,7 +23,6 @@ const (
 	headerUA                  = "User-Agent"
 	headerXCanary             = "X-Canary"
 	headerXRequestID          = "X-Request-ID"
-	queryAccessToken          = "access_token"
 	defaultCacheSize          = 100000
 	defaultExpiration         = time.Minute * 10
 	defaultCacheCleanDuration = time.Minute * 20
@@ -37,7 +36,7 @@ var validLabelReg = regexp.MustCompile(`^[a-z][0-9a-z-]{1,62}$`)
 type Canary struct {
 	name                 string
 	product              string
-	cookie               string
+	uidCookies           []string
 	addRequestID         bool
 	canaryResponseHeader bool
 	ls                   *LabelStore
@@ -70,7 +69,7 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 	}
 
 	ls := NewLabelStore(logger, cfg, expiration, cacheCleanDuration)
-	return &Canary{name: name, product: cfg.Product, cookie: cfg.Cookie,
+	return &Canary{name: name, product: cfg.Product, uidCookies: cfg.UIDCookies,
 		addRequestID: cfg.AddRequestID, canaryResponseHeader: cfg.CanaryResponseHeader, ls: ls, next: next}, nil
 }
 
@@ -80,18 +79,19 @@ func (c *Canary) GetTracingInformation() (string, ext.SpanKindEnum) {
 }
 
 func (c *Canary) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	c.processRequestID(req)
+	c.processRequestID(rw, req)
 	c.processCanary(rw, req)
 	c.next.ServeHTTP(rw, req)
 }
 
-func (c *Canary) processRequestID(req *http.Request) {
+func (c *Canary) processRequestID(rw http.ResponseWriter, req *http.Request) {
 	if c.addRequestID {
 		requestID := req.Header.Get(headerXRequestID)
 		if requestID == "" {
 			requestID = generator()
 			req.Header.Set(headerXRequestID, requestID)
 		}
+		rw.Header().Set(headerXRequestID, requestID)
 	}
 }
 
@@ -106,7 +106,7 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	info.product = c.product
-	info.uid = extractUserID(req, c.cookie)
+	info.uid = extractUserID(req, c.uidCookies)
 
 	if info.label == "" && info.uid != "" {
 		labels := c.ls.MustLoadLabels(req.Context(), info.uid, req.Header.Get(headerXRequestID))
@@ -129,31 +129,49 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 
 type userInfo struct {
 	UID string `json:"uid"`
+	Sub string `json:"sub"`
+	ID  string `json:"id"`
 }
 
-func extractUserID(req *http.Request, cookieName string) string {
+func extractUserID(req *http.Request, uidCookies []string) string {
 	jwToken := req.Header.Get(headerAuth)
 	if jwToken != "" {
 		if strs := strings.Split(jwToken, " "); len(strs) == 2 {
 			jwToken = strs[1]
 		}
 	}
-	if jwToken == "" {
-		jwToken = req.URL.Query().Get(queryAccessToken)
+
+	uid := extractUserIDFromBase64(extractPayload(jwToken))
+	if uid == "" && len(uidCookies) > 0 {
+		for _, name := range uidCookies {
+			if cookie, _ := req.Cookie(name); cookie != nil {
+				if uid = extractUserIDFromBase64(extractPayload(cookie.Value)); uid != "" {
+					return uid
+				}
+			}
+		}
 	}
-	if jwToken != "" {
-		if strs := strings.Split(jwToken, "."); len(strs) == 3 {
-			return extractUserIDFromBase64(strs[1])
-		}
-	} else if cookieName != "" {
-		if cookie, _ := req.Cookie(cookieName); cookie != nil {
-			return extractUserIDFromBase64(cookie.Value)
-		}
+	return uid
+}
+
+func extractPayload(s string) string {
+	if s == "" {
+		return s
+	}
+	strs := strings.Split(s, ".")
+	switch len(strs) {
+	case 3:
+		return strs[1] // JWT token
+	case 1:
+		return strs[0]
 	}
 	return ""
 }
 
 func extractUserIDFromBase64(s string) string {
+	if s == "" {
+		return s
+	}
 	if i := strings.IndexRune(s, '='); i > 0 {
 		s = s[:i] // remove padding
 	}
@@ -168,7 +186,14 @@ func extractUserIDFromBase64(s string) string {
 	if len(b) > 0 {
 		user := &userInfo{}
 		if err = json.Unmarshal(b, user); err == nil {
-			return user.UID
+			switch {
+			case user.UID != "":
+				return user.UID
+			case user.Sub != "":
+				return user.Sub
+			case user.ID != "":
+				return user.ID
+			}
 		}
 	}
 	return ""
