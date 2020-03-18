@@ -171,6 +171,8 @@ func (c configBuilder) buildTraefikService(ctx context.Context, tService *v1alph
 		return c.buildMirroring(ctx, tService, id, conf)
 	} else if tService.Spec.Labeled != nil {
 		return c.buildLabeledLB(ctx, tService.Namespace, tService.Spec, id, conf)
+	} else if tService.Spec.LoadBalancer != nil {
+		return c.buildLoadBalancer(*tService.Spec.LoadBalancer, id, conf)
 	}
 
 	return errors.New("unspecified service type")
@@ -284,6 +286,19 @@ func (c configBuilder) buildLabeledLB(ctx context.Context, namespace string, tSe
 			Services:    labeledServices,
 		},
 	}
+	return nil
+}
+
+// buildLoadBalancer creates the configuration for the load-balancer of servers defined by svc.
+func (c configBuilder) buildLoadBalancer(slb dynamic.ServersLoadBalancer, id string, conf map[string]*dynamic.Service) error {
+	if slb.PassHostHeader == nil {
+		passHostHeader := true
+		slb.PassHostHeader = &passHostHeader
+	}
+	conf[id] = &dynamic.Service{
+		LoadBalancer: &slb,
+	}
+
 	return nil
 }
 

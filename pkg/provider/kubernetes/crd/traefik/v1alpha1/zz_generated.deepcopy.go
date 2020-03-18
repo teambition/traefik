@@ -912,6 +912,11 @@ func (in *ServiceSpec) DeepCopyInto(out *ServiceSpec) {
 		*out = new(LabeledRoundRobin)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.LoadBalancer != nil {
+		in, out := &in.LoadBalancer, &out.LoadBalancer
+		*out = new(dynamic.ServersLoadBalancer)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
