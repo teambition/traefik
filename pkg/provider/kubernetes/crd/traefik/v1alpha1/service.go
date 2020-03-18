@@ -34,9 +34,10 @@ type TraefikServiceList struct {
 // ServiceSpec defines whether a TraefikService is a load-balancer of services or a
 // mirroring service.
 type ServiceSpec struct {
-	Weighted  *WeightedRoundRobin `json:"weighted,omitempty"`
-	Mirroring *Mirroring          `json:"mirroring,omitempty"`
-	Labeled   *LabeledRoundRobin  `json:"labeled,omitempty"`
+	Weighted     *WeightedRoundRobin          `json:"weighted,omitempty"`
+	Mirroring    *Mirroring                   `json:"mirroring,omitempty"`
+	Labeled      *LabeledRoundRobin           `json:"labeled,omitempty"`
+	LoadBalancer *dynamic.ServersLoadBalancer `json:"loadBalancer,omitempty"`
 }
 
 // +k8s:deepcopy-gen=true
