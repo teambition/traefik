@@ -82,15 +82,6 @@ func (c *Canary) GetTracingInformation() (string, ext.SpanKindEnum) {
 func (c *Canary) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	c.processRequestID(rw, req)
 	c.processCanary(rw, req)
-
-	if logData := accesslog.GetLogData(req); logData != nil {
-		if requestID := req.Header.Get(headerXRequestID); requestID != "" {
-			logData.Core["XRequestID"] = requestID
-		}
-		if xCanary := req.Header.Values(headerXCanary); len(xCanary) > 0 {
-			logData.Core["XCanary"] = xCanary
-		}
-	}
 	c.next.ServeHTTP(rw, req)
 }
 
@@ -102,6 +93,10 @@ func (c *Canary) processRequestID(rw http.ResponseWriter, req *http.Request) {
 			req.Header.Set(headerXRequestID, requestID)
 		}
 		rw.Header().Set(headerXRequestID, requestID)
+
+		if logData := accesslog.GetLogData(req); logData != nil {
+			logData.Core["XRequestID"] = requestID
+		}
 	}
 }
 
@@ -134,6 +129,15 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 	info.intoHeader(req.Header)
 	if c.canaryResponseHeader {
 		info.intoHeader(rw.Header())
+	}
+
+	if logData := accesslog.GetLogData(req); logData != nil {
+		if info.uid != "" {
+			logData.Core["UID"] = info.uid
+		}
+		if xCanary := req.Header.Values(headerXCanary); len(xCanary) > 0 {
+			logData.Core["XCanary"] = xCanary
+		}
 	}
 }
 
