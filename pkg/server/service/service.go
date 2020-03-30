@@ -23,6 +23,7 @@ import (
 	"github.com/containous/traefik/v2/pkg/safe"
 	"github.com/containous/traefik/v2/pkg/server/cookie"
 	"github.com/containous/traefik/v2/pkg/server/provider"
+	"github.com/containous/traefik/v2/pkg/server/service/loadbalancer/lrr"
 	"github.com/containous/traefik/v2/pkg/server/service/loadbalancer/mirror"
 	"github.com/containous/traefik/v2/pkg/server/service/loadbalancer/wrr"
 	"github.com/vulcand/oxy/roundrobin"
@@ -110,6 +111,13 @@ func (m *Manager) BuildHTTP(rootCtx context.Context, serviceName string, respons
 			conf.AddError(err, true)
 			return nil, err
 		}
+	case conf.Labeled != nil:
+		var err error
+		lb, err = m.getLRRServiceHandler(ctx, serviceName, conf.Labeled, responseModifier)
+		if err != nil {
+			conf.AddError(err, true)
+			return nil, err
+		}
 	default:
 		sErr := fmt.Errorf("the service %q does not have any type defined", serviceName)
 		conf.AddError(sErr, true)
@@ -158,6 +166,29 @@ func (m *Manager) getWRRServiceHandler(ctx context.Context, serviceName string, 
 		}
 
 		balancer.AddService(service.Name, serviceHandler, service.Weight)
+	}
+	return balancer, nil
+}
+
+func (m *Manager) getLRRServiceHandler(ctx context.Context, serviceName string, config *dynamic.LabeledRoundRobin, responseModifier func(*http.Response) error) (http.Handler, error) {
+
+	if config.Default == "" {
+		err := errors.New("cannot create labeled service: default service required")
+		return nil, err
+	}
+	defaultHandler, err := m.BuildHTTP(ctx, config.Default, responseModifier)
+	if err != nil {
+		return nil, err
+	}
+
+	balancer := lrr.New(config.ServiceName, defaultHandler)
+	for _, fullServiceName := range config.Services {
+		serviceHandler, err := m.BuildHTTP(ctx, fullServiceName, responseModifier)
+		if err != nil {
+			return nil, err
+		}
+
+		balancer.AddService(fullServiceName, serviceHandler)
 	}
 	return balancer, nil
 }

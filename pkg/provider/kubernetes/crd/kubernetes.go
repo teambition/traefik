@@ -217,6 +217,7 @@ func (p *Provider) loadConfigurationFromCRD(ctx context.Context, client Client) 
 			StripPrefixRegex:  middleware.Spec.StripPrefixRegex,
 			ReplacePath:       middleware.Spec.ReplacePath,
 			ReplacePathRegex:  middleware.Spec.ReplacePathRegex,
+			Canary:            middleware.Spec.Canary,
 			Chain:             createChainMiddleware(ctxMid, middleware.Namespace, middleware.Spec.Chain),
 			IPWhiteList:       middleware.Spec.IPWhiteList,
 			Headers:           middleware.Spec.Headers,
