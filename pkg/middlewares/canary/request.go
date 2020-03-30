@@ -77,7 +77,7 @@ func getUserLabels(ctx context.Context, url, xRequestID string) (*labelsRes, err
 	req.Header.Set(headerXRequestID, xRequestID)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("xRequestId: %s, request error: %s", xRequestID, err.Error())
 	}
 	defer resp.Body.Close()
 
@@ -87,12 +87,12 @@ func getUserLabels(ctx context.Context, url, xRequestID string) (*labelsRes, err
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("getUserLabels error: %d, %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("xRequestId: %s, getUserLabels error: %d, %s", xRequestID, resp.StatusCode, string(respBody))
 	}
 
 	res := &labelsRes{}
 	if err = json.Unmarshal(respBody, res); err != nil {
-		return nil, fmt.Errorf("getUserLabels error: %d, %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("xRequestId: %s, getUserLabels error: %d, %s", xRequestID, resp.StatusCode, string(respBody))
 	}
 
 	return res, nil

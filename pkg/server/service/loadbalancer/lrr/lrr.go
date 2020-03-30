@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -21,11 +22,30 @@ func New(defaultServiceName string, handler http.Handler) *Balancer {
 	return &Balancer{serviceName: defaultServiceName, defaultHandler: handler}
 }
 
+type sliceHandler []*namedHandler
+
+func (s sliceHandler) Match(name string) *namedHandler {
+	for _, handler := range s {
+		if strings.HasPrefix(name, handler.name) {
+			return handler
+		}
+	}
+	return nil
+}
+
+func (s sliceHandler) AppendAndSort(h *namedHandler) sliceHandler {
+	s = append(s, h)
+	sort.SliceStable(s, func(i, j int) bool {
+		return len(s[i].name) > len(s[j].name)
+	})
+	return s
+}
+
 // Balancer is a labeled load-balancer of services, which select service by label.
 type Balancer struct {
 	serviceName    string
 	defaultHandler http.Handler
-	handlers       []*namedHandler
+	handlers       sliceHandler
 }
 
 func (b *Balancer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -39,11 +59,9 @@ func (b *Balancer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	name := b.serviceName
 	if label != "" {
 		name = fmt.Sprintf("%s-%s", name, label)
-		for _, handler := range b.handlers {
-			if handler.name == name {
-				handler.ServeHTTP(w, req)
-				return
-			}
+		if handler := b.handlers.Match(name); handler != nil {
+			handler.ServeHTTP(w, req)
+			return
 		}
 	}
 
@@ -59,7 +77,7 @@ func (b *Balancer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // It is not thread safe with ServeHTTP.
 func (b *Balancer) AddService(fullServiceName string, handler http.Handler) {
 	h := &namedHandler{Handler: handler, name: removeNsPort(fullServiceName, b.serviceName)}
-	b.handlers = append(b.handlers, h)
+	b.handlers = b.handlers.AppendAndSort(h)
 }
 
 // full service name format (build by fullServiceName function): namespace-serviceName-port
