@@ -25,7 +25,7 @@ func (u uuidv4) String() string {
 	return string(buf)
 }
 
-func generator() string {
+func generatorUUID() string {
 	id := uuidv4{}
 	if _, err := rand.Read(id[:]); err != nil {
 		return ""

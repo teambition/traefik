@@ -40,6 +40,7 @@ type Canary struct {
 	uidCookies           []string
 	addRequestID         bool
 	canaryResponseHeader bool
+	loadLabels           bool
 	ls                   *LabelStore
 	next                 http.Handler
 }
@@ -51,9 +52,6 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 
 	if cfg.Product == "" {
 		return nil, fmt.Errorf("product name required for Canary middleware")
-	}
-	if cfg.Server == "" {
-		return nil, fmt.Errorf("canary label server required for Canary middleware")
 	}
 
 	expiration := time.Duration(cfg.CacheExpiration)
@@ -70,7 +68,7 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 	}
 
 	ls := NewLabelStore(logger, cfg, expiration, cacheCleanDuration)
-	return &Canary{name: name, product: cfg.Product, uidCookies: cfg.UIDCookies,
+	return &Canary{name: name, product: cfg.Product, uidCookies: cfg.UIDCookies, loadLabels: cfg.Server != "",
 		addRequestID: cfg.AddRequestID, canaryResponseHeader: cfg.CanaryResponseHeader, ls: ls, next: next}, nil
 }
 
@@ -86,58 +84,61 @@ func (c *Canary) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 func (c *Canary) processRequestID(rw http.ResponseWriter, req *http.Request) {
+	requestID := req.Header.Get(headerXRequestID)
 	if c.addRequestID {
-		requestID := req.Header.Get(headerXRequestID)
 		if requestID == "" {
-			requestID = generator()
+			requestID = generatorUUID()
 			req.Header.Set(headerXRequestID, requestID)
 		}
 		rw.Header().Set(headerXRequestID, requestID)
+	}
 
-		if logData := accesslog.GetLogData(req); logData != nil {
-			logData.Core["XRequestID"] = requestID
-		}
+	if logData := accesslog.GetLogData(req); logData != nil {
+		logData.Core["XRequestID"] = requestID
+		logData.Core["UserAgent"] = req.Header.Get(headerUA)
 	}
 }
 
 func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 	info := &canaryHeader{}
-	info.fromHeader(req.Header, false)
 
-	if info.label == "" {
-		if cookie, _ := req.Cookie(headerXCanary); cookie != nil && validLabelReg.MatchString(cookie.Value) {
-			info.label = cookie.Value
-		}
-	}
-
-	info.product = c.product
-	info.uid = extractUserID(req, c.uidCookies)
-
-	if info.label == "" && info.uid != "" {
-		labels := c.ls.MustLoadLabels(req.Context(), info.uid, req.Header.Get(headerXRequestID))
-		for _, l := range labels {
-			if info.client != "" && !l.MatchClient(info.client) {
-				continue
+	if !c.loadLabels {
+		// just trust the canary header when work as internal gateway.
+		info.fromHeader(req.Header, true)
+	} else {
+		// load user's labels and update to header when work as public gateway.
+		info.fromHeader(req.Header, false)
+		if info.label == "" {
+			if cookie, _ := req.Cookie(headerXCanary); cookie != nil && validLabelReg.MatchString(cookie.Value) {
+				info.label = cookie.Value
 			}
-			if info.channel != "" && !l.MatchChannel(info.channel) {
-				continue
-			}
-			info.label = l.Label
-			break
 		}
-	}
-	info.intoHeader(req.Header)
-	if c.canaryResponseHeader {
-		info.intoHeader(rw.Header())
+
+		info.product = c.product
+		info.uid = extractUserID(req, c.uidCookies)
+
+		if info.label == "" && info.uid != "" {
+			labels := c.ls.MustLoadLabels(req.Context(), info.uid, req.Header.Get(headerXRequestID))
+			for _, l := range labels {
+				if info.client != "" && !l.MatchClient(info.client) {
+					continue
+				}
+				if info.channel != "" && !l.MatchChannel(info.channel) {
+					continue
+				}
+				info.label = l.Label
+				break
+			}
+		}
+		info.intoHeader(req.Header)
+		if c.canaryResponseHeader {
+			info.intoHeader(rw.Header())
+		}
 	}
 
 	if logData := accesslog.GetLogData(req); logData != nil {
-		if info.uid != "" {
-			logData.Core["UID"] = info.uid
-		}
-		if xCanary := req.Header.Values(headerXCanary); len(xCanary) > 0 {
-			logData.Core["XCanary"] = xCanary
-		}
+		logData.Core["UID"] = info.uid
+		logData.Core["XCanary"] = req.Header.Values(headerXCanary)
 	}
 }
 
