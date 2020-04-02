@@ -67,9 +67,19 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 		cfg.MaxCacheSize = defaultCacheSize
 	}
 
-	ls := NewLabelStore(logger, cfg, expiration, cacheCleanDuration)
-	return &Canary{name: name, product: cfg.Product, uidCookies: cfg.UIDCookies, loadLabels: cfg.Server != "",
-		addRequestID: cfg.AddRequestID, canaryResponseHeader: cfg.CanaryResponseHeader, ls: ls, next: next}, nil
+	c := &Canary{
+		name:                 name,
+		next:                 next,
+		product:              cfg.Product,
+		uidCookies:           cfg.UIDCookies,
+		loadLabels:           cfg.Server != "",
+		addRequestID:         cfg.AddRequestID,
+		canaryResponseHeader: cfg.CanaryResponseHeader,
+	}
+	if c.loadLabels {
+		c.ls = NewLabelStore(logger, cfg, expiration, cacheCleanDuration)
+	}
+	return c, nil
 }
 
 // GetTracingInformation implements Tracable interface
