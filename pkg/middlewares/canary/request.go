@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"sync/atomic"
@@ -88,12 +89,12 @@ type labelsRes struct {
 	Result    []Label `json:"result"`    // 空数组也保留
 }
 
-func getUserLabels(ctx context.Context, url, xRequestID string) (*labelsRes, error) {
+func getUserLabels(ctx context.Context, api, xRequestID string) (*labelsRes, error) {
 	if ctx.Err() != nil {
 		return nil, nil
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", api, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +116,7 @@ func getUserLabels(ctx context.Context, url, xRequestID string) (*labelsRes, err
 	req.Header.Set(headerXRequestID, xRequestID)
 	resp, err := client.Do(req)
 	if err != nil {
-		if err == context.Canceled {
+		if err.(*url.Error).Unwrap() == context.Canceled {
 			return nil, nil
 		}
 
@@ -144,12 +145,12 @@ func getUserLabels(ctx context.Context, url, xRequestID string) (*labelsRes, err
 }
 
 // MustGetUserLabels returns labels and timestamp
-func MustGetUserLabels(ctx context.Context, url, xRequestID string, logger log.Logger) ([]Label, int64) {
+func MustGetUserLabels(ctx context.Context, api, xRequestID string, logger log.Logger) ([]Label, int64) {
 	ts := time.Now().UTC().Unix()
 	rs := []Label{}
 
 	if hc.MaybeHealthy() {
-		if res, err := getUserLabels(ctx, url, xRequestID); err != nil {
+		if res, err := getUserLabels(ctx, api, xRequestID); err != nil {
 			logger.Error(err)
 		} else if res != nil {
 			rs = res.Result
