@@ -112,7 +112,9 @@ func (s *LabelStore) mustLoadEntry(key string, now time.Time) *entry {
 	s.mu.RLock()
 	e, ok := s.liveMap[key]
 	s.mu.RUnlock()
-	if ok && len(s.liveMap) <= s.maxCacheSize {
+
+	shouldRound := len(s.liveMap) > s.maxCacheSize || s.shouldRound.Before(now)
+	if ok && !shouldRound {
 		return e
 	}
 
@@ -127,12 +129,12 @@ func (s *LabelStore) mustLoadEntry(key string, now time.Time) *entry {
 		}
 	}
 
-	if !ok {
+	if !ok || e == nil {
 		e = &entry{}
 		s.liveMap[key] = e
 	}
 
-	if len(s.liveMap) > s.maxCacheSize || s.shouldRound.Before(now) {
+	if shouldRound {
 		s.logger.Infof("Round cache, stale cache size: %d, live cache size: %d", len(s.staleMap), len(s.liveMap))
 		s.shouldRound = now.Add(s.cacheCleanDuration)
 		// make a round: drop staleMap and create new liveMap
