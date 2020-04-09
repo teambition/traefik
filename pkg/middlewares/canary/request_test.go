@@ -1,6 +1,7 @@
 package canary
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -19,14 +20,19 @@ func TestHealthcheck(t *testing.T) {
 		a.True(hc.MaybeHealthy())
 		hc.CountFailure()
 		a.True(hc.MaybeHealthy())
+
+		var wg sync.WaitGroup
+		wg.Add(10)
 		for i := 0; i < 10; i++ {
 			go func() {
+				defer wg.Done()
 				hc.CountFailure()
 			}()
 		}
+		wg.Wait()
 		a.False(hc.MaybeHealthy())
 
-		time.Sleep(time.Millisecond * 1001)
+		time.Sleep(time.Millisecond * 1010)
 		a.True(hc.MaybeHealthy())
 		hc.CountFailure()
 		a.False(hc.MaybeHealthy())
