@@ -41,7 +41,7 @@ func TestLabelStore(t *testing.T) {
 		cfg := dynamic.Canary{MaxCacheSize: 3, Server: "localhost", Product: "T"}
 		ls := NewLabelStore(logrus.StandardLogger(), cfg, time.Second, time.Second*2)
 		ls.mustFetchLabels = func(ctx context.Context, uid, requestID string) ([]Label, int64) {
-			return []Label{Label{Label: requestID}}, time.Now().Unix()
+			return []Label{{Label: requestID}}, time.Now().Unix()
 		}
 
 		u1 := ls.mustLoadEntry("u1", time.Now())
@@ -77,7 +77,7 @@ func TestLabelStore(t *testing.T) {
 		cfg := dynamic.Canary{MaxCacheSize: 3, Server: "localhost", Product: "T"}
 		ls := NewLabelStore(logrus.StandardLogger(), cfg, time.Second, time.Second*2)
 		ls.mustFetchLabels = func(ctx context.Context, uid, requestID string) ([]Label, int64) {
-			return []Label{Label{Label: requestID}}, time.Now().Unix()
+			return []Label{{Label: requestID}}, time.Now().Unix()
 		}
 
 		labels := ls.MustLoadLabels(context.Background(), "u1", "v1")
@@ -116,7 +116,7 @@ func TestLabelStore(t *testing.T) {
 		var call int32
 		ls.mustFetchLabels = func(ctx context.Context, uid, requestID string) ([]Label, int64) {
 			atomic.AddInt32(&call, 1)
-			return []Label{Label{Label: requestID}}, time.Now().Unix()
+			return []Label{{Label: requestID}}, time.Now().Unix()
 		}
 
 		var wg sync.WaitGroup

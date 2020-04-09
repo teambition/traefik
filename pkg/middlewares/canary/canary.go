@@ -55,7 +55,7 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 	}
 
 	expiration := time.Duration(cfg.CacheExpiration)
-	if expiration < time.Minute {
+	if expiration < time.Second {
 		expiration = defaultExpiration
 	}
 	cacheCleanDuration := time.Duration(cfg.CacheCleanDuration)
