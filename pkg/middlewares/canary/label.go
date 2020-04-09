@@ -134,7 +134,7 @@ func (s *LabelStore) mustLoadEntry(key string, now time.Time) *entry {
 		s.liveMap[key] = e
 	}
 
-	if shouldRound {
+	if shouldRound || len(s.liveMap) > s.maxCacheSize {
 		s.logger.Infof("Round cache, stale cache size: %d, live cache size: %d", len(s.staleMap), len(s.liveMap))
 		s.shouldRound = now.Add(s.cacheCleanDuration)
 		// make a round: drop staleMap and create new liveMap
