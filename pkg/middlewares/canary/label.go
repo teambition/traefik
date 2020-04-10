@@ -111,9 +111,9 @@ func (s *LabelStore) MustLoadLabels(ctx context.Context, uid, requestID string) 
 func (s *LabelStore) mustLoadEntry(key string, now time.Time) *entry {
 	s.mu.RLock()
 	e, ok := s.liveMap[key]
+	shouldRound := len(s.liveMap) > s.maxCacheSize || s.shouldRound.Before(now)
 	s.mu.RUnlock()
 
-	shouldRound := len(s.liveMap) > s.maxCacheSize || s.shouldRound.Before(now)
 	if ok && !shouldRound {
 		return e
 	}
@@ -134,8 +134,9 @@ func (s *LabelStore) mustLoadEntry(key string, now time.Time) *entry {
 		s.liveMap[key] = e
 	}
 
-	if shouldRound || len(s.liveMap) > s.maxCacheSize {
-		s.logger.Infof("Round cache, stale cache size: %d, live cache size: %d", len(s.staleMap), len(s.liveMap))
+	if len(s.liveMap) > s.maxCacheSize || s.shouldRound.Before(now) {
+		s.logger.Infof("Round cache, stale cache size: %d, live cache size: %d, trigger: %s, shouldRound: %s",
+			len(s.staleMap), len(s.liveMap), key, s.shouldRound.Format(time.RFC3339))
 		s.shouldRound = now.Add(s.cacheCleanDuration)
 		// make a round: drop staleMap and create new liveMap
 		s.staleMap = s.liveMap

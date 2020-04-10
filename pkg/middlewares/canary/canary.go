@@ -48,7 +48,6 @@ type Canary struct {
 // New returns a Canary instance.
 func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string) (*Canary, error) {
 	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
-	logger.Debug("Add canary middleware")
 
 	if cfg.Product == "" {
 		return nil, fmt.Errorf("product name required for Canary middleware")
@@ -79,6 +78,7 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 	if c.loadLabels {
 		c.ls = NewLabelStore(logger, cfg, expiration, cacheCleanDuration)
 	}
+	logger.Infof("Add canary middleware: %v, %v, %v", cfg, expiration, cacheCleanDuration)
 	return c, nil
 }
 
