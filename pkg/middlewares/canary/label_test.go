@@ -44,28 +44,37 @@ func TestLabelStore(t *testing.T) {
 			return []Label{{Label: requestID}}, time.Now().Unix()
 		}
 
-		u1 := ls.mustLoadEntry("u1", time.Now())
+		u1, ok := ls.s.mustLoadEntry("u1", time.Now())
+		a.False(ok)
 		var wg sync.WaitGroup
 
 		wg.Add(3)
 		go func(e *entry) {
 			defer wg.Done()
-			a.Equal(e, ls.mustLoadEntry("u1", time.Now()))
+			u1, ok := ls.s.mustLoadEntry("u1", time.Now())
+			a.False(ok)
+			a.Equal(e, u1)
 		}(u1)
 
 		go func(e *entry) {
 			defer wg.Done()
-			a.Equal(e, ls.mustLoadEntry("u1", time.Now()))
+			u1, ok := ls.s.mustLoadEntry("u1", time.Now())
+			a.False(ok)
+			a.Equal(e, u1)
 		}(u1)
 
 		go func(e *entry) {
 			defer wg.Done()
-			ls.mustLoadEntry("u2", time.Now())
-			ls.mustLoadEntry("u3", time.Now())
-			ls.mustLoadEntry("u4", time.Now())
-			// Round cache
-			a.Equal(0, len(ls.liveMap))
-			a.Equal(e, ls.mustLoadEntry("u1", time.Now()))
+			_, ok := ls.s.mustLoadEntry("u2", time.Now())
+			a.False(ok)
+			_, ok = ls.s.mustLoadEntry("u3", time.Now())
+			a.False(ok)
+			_, ok = ls.s.mustLoadEntry("u4", time.Now())
+			a.True(ok)
+			a.Equal(0, len(ls.s.liveMap))
+			u1, ok := ls.s.mustLoadEntry("u1", time.Now())
+			a.False(ok)
+			a.Equal(e, u1)
 		}(u1)
 
 		wg.Wait()
@@ -105,7 +114,7 @@ func TestLabelStore(t *testing.T) {
 		_ = ls.MustLoadLabels(context.Background(), "u4", "v2")
 
 		// Round cache
-		a.Equal(0, len(ls.liveMap))
+		a.Equal(0, len(ls.s.liveMap))
 
 		// load cache from staleMap
 		labels = ls.MustLoadLabels(context.Background(), "u1", "v4")
