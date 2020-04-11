@@ -38,7 +38,7 @@ func TestLabelStore(t *testing.T) {
 	t.Run("mustLoadEntry should work", func(t *testing.T) {
 		a := assert.New(t)
 
-		cfg := dynamic.Canary{MaxCacheSize: 3, Server: "localhost", Product: "T"}
+		cfg := dynamic.Canary{MaxCacheSize: 3, Server: "localhost1", Product: "T"}
 		ls := NewLabelStore(logrus.StandardLogger(), cfg, time.Second, time.Second*2)
 		ls.mustFetchLabels = func(ctx context.Context, uid, requestID string) ([]Label, int64) {
 			return []Label{{Label: requestID}}, time.Now().Unix()
@@ -83,7 +83,7 @@ func TestLabelStore(t *testing.T) {
 	t.Run("MustLoadLabels should work", func(t *testing.T) {
 		a := assert.New(t)
 
-		cfg := dynamic.Canary{MaxCacheSize: 3, Server: "localhost", Product: "T"}
+		cfg := dynamic.Canary{MaxCacheSize: 3, Server: "localhost2", Product: "T"}
 		ls := NewLabelStore(logrus.StandardLogger(), cfg, time.Second, time.Second*2)
 		ls.mustFetchLabels = func(ctx context.Context, uid, requestID string) ([]Label, int64) {
 			return []Label{{Label: requestID}}, time.Now().Unix()
