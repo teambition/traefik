@@ -100,7 +100,9 @@ func (c *Canary) processRequestID(rw http.ResponseWriter, req *http.Request) {
 			requestID = generatorUUID()
 			req.Header.Set(headerXRequestID, requestID)
 		}
-		rw.Header().Set(headerXRequestID, requestID)
+		if rw.Header().Get(headerXRequestID) == "" {
+			rw.Header().Set(headerXRequestID, requestID)
+		}
 	}
 
 	if logData := accesslog.GetLogData(req); logData != nil {
