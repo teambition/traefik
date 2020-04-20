@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -22,11 +21,7 @@ import (
 )
 
 func init() {
-	hostname, _ := os.Hostname()
-	if hostname == "" {
-		hostname = "unknown"
-	}
-	userAgent = fmt.Sprintf("Go/%v Hostname/%s Traefik/%s (Canary Middleware)", runtime.Version(), hostname, version.Version)
+	userAgent = fmt.Sprintf("Go/%v Traefik/%s (Canary Middleware)", runtime.Version(), version.Version)
 }
 
 var userAgent string

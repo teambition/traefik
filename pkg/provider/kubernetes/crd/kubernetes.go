@@ -137,6 +137,7 @@ func (p *Provider) Provide(configurationChan chan<- dynamic.Message, pool *safe.
 					case p.lastConfiguration.Get() == confHash:
 						logger.Debugf("Skipping Kubernetes event kind %T", event)
 					default:
+						logger.Infof("Process Kubernetes event %T, hash %d, conf %+v", event, confHash, conf)
 						p.lastConfiguration.Set(confHash)
 						configurationChan <- dynamic.Message{
 							ProviderName:  providerName,
