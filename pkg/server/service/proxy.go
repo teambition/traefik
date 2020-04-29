@@ -89,11 +89,14 @@ func buildProxy(passHostHeader *bool, responseForwarding *dynamic.ResponseForwar
 				}
 			}
 
-			log.Infof("'%d %s' caused by: %v", statusCode, statusText(statusCode), err)
+			if statusCode > 500 {
+				log.Warnf("Error proxying: %d, xRequestID: %s, host: %s, url: %s, caused by: %v",
+					statusCode, request.Header.Get("X-Request-ID"), request.Host, request.URL.String(), err)
+			}
 			w.WriteHeader(statusCode)
 			_, werr := w.Write([]byte(statusText(statusCode)))
 			if werr != nil {
-				log.Infof("Error while writing status code", werr)
+				log.Warnf("Error while writing status code: %s", werr.Error())
 			}
 		},
 	}
