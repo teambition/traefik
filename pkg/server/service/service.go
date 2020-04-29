@@ -182,10 +182,12 @@ func (m *Manager) getLRRServiceHandler(ctx context.Context, serviceName string, 
 	}
 
 	balancer := lrr.New(config.ServiceName, defaultHandler)
+	logger := log.FromContext(ctx)
 	for _, fullServiceName := range config.Services {
 		serviceHandler, err := m.BuildHTTP(ctx, fullServiceName, responseModifier)
 		if err != nil {
-			return nil, err
+			logger.Errorf("getLRRServiceHandler %s failed: %s,", fullServiceName, err.Error())
+			continue // should fallback to defaultHandler
 		}
 
 		balancer.AddService(fullServiceName, serviceHandler)

@@ -153,9 +153,10 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 }
 
 type userInfo struct {
-	UID string `json:"uid"`
-	Sub string `json:"sub"`
-	ID  string `json:"id"`
+	UID0 string `json:"uid"`
+	UID1 string `json:"_userId"`
+	UID2 string `json:"sub"`
+	UID3 string `json:"id"`
 }
 
 func extractUserID(req *http.Request, uidCookies []string) string {
@@ -212,12 +213,14 @@ func extractUserIDFromBase64(s string) string {
 		user := &userInfo{}
 		if err = json.Unmarshal(b, user); err == nil {
 			switch {
-			case user.UID != "":
-				return user.UID
-			case user.Sub != "":
-				return user.Sub
-			case user.ID != "":
-				return user.ID
+			case user.UID0 != "":
+				return user.UID0
+			case user.UID1 != "":
+				return user.UID1
+			case user.UID2 != "":
+				return user.UID2
+			case user.UID3 != "":
+				return user.UID3
 			}
 		}
 	}

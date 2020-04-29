@@ -265,18 +265,23 @@ func (c configBuilder) buildLabeledLB(ctx context.Context, namespace string, tSe
 		conf[fullNameMain] = k8sService
 	}
 
-	labeledServices := make([]string, len(tService.Labeled.Services))
-
-	for i, service := range tService.Labeled.Services {
-		fullName, k8sService, err := c.nameAndService(ctx, namespace, service.LoadBalancerSpec)
+	logger := log.FromContext(ctx)
+	labeledServices := make([]string, 0)
+	for _, service := range tService.Labeled.Services {
+		s := service.LoadBalancerSpec
+		fullName, k8sService, err := c.nameAndService(ctx, namespace, s)
 		if err != nil {
-			return err
+			logger.Errorf("buildLabeledLB (%s, %s, %s) failed: %s,", s.Name, s.Namespace, s.Kind, err.Error())
+			continue // ignore invalid service
 		}
 
-		if k8sService != nil {
-			conf[fullName] = k8sService
+		if k8sService == nil {
+			logger.Errorf("buildLabeledLB %s failed: %s,", fullName, "no k8s service")
+			continue // ignore invalid service
 		}
-		labeledServices[i] = fullName
+
+		conf[fullName] = k8sService
+		labeledServices = append(labeledServices, fullName)
 	}
 
 	conf[id] = &dynamic.Service{

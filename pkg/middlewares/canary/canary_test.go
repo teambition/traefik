@@ -172,7 +172,7 @@ func TestCanary(t *testing.T) {
 		cfg := dynamic.Canary{MaxCacheSize: 3, Server: "localhost", Product: "Urbs", AddRequestID: true}
 		c, err := New(context.Background(), next, cfg, "test")
 		c.ls.mustFetchLabels = func(ctx context.Context, uid, requestID string) ([]Label, int64) {
-			return []Label{Label{Label: uid}}, time.Now().Unix()
+			return []Label{{Label: uid}}, time.Now().Unix()
 		}
 		a.Nil(err)
 
