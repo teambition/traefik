@@ -63,27 +63,36 @@ func TestLRRBalancer(t *testing.T) {
 			r string
 		}
 		list := []ir{
-			ir{"lrr", "lrr"},
-			ir{"lrr-api", "lrr-api"},
-			ir{"lrr-api-stable", "lrr-api-stable"},
-			ir{"lrr-api-canary", "lrr-api-canary"},
-			ir{"lrr-api-canary-v2", "lrr-api-canary-v2"},
-			ir{"lrr-api-canary-v1", "lrr-api-canary-v1"},
-			ir{"lrr-api-canary-v3", "lrr-api-canary"},
-			ir{"lrr-api-canary-v1-beta1", "lrr-api-canary-v1"},
-			ir{"lrr-api-dev", "lrr-api"},
-			ir{"lrr-web", "lrr"},
+			{"lrr", "lrr"},
+			{"lrr-api", "lrr-api"},
+			{"lrr-api-stable", "lrr-api-stable"},
+			{"lrr-api-canary", "lrr-api-canary"},
+			{"lrr-api-canary-v2", "lrr-api-canary-v2"},
+			{"lrr-api-canary-v1", "lrr-api-canary-v1"},
+			{"lrr-api-canary-v3", "lrr-api-canary"},
+			{"lrr-api-canary-v1-beta1", "lrr-api-canary-v1"},
+			{"lrr-api-dev", "lrr-api"},
+			{"lrr-web", "lrr"},
 		}
 
 		for _, ele := range list {
-			h := s.Match(ele.i)
+			h := s.Match(ele.i, true)
 			a.Equal(ele.r, h.name)
 		}
 
-		h := s.Match("api")
+		h := s.Match("lrr", false)
+		a.NotNil(h)
+
+		h = s.Match("lrr-api", false)
+		a.NotNil(h)
+
+		h = s.Match("lrr-api-canary-v1-beta1", false)
 		a.Nil(h)
 
-		h = s.Match("lr")
+		h = s.Match("api", true)
+		a.Nil(h)
+
+		h = s.Match("lr", true)
 		a.Nil(h)
 	})
 }

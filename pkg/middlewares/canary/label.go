@@ -9,6 +9,7 @@ import (
 
 	"github.com/containous/traefik/v2/pkg/config/dynamic"
 	"github.com/containous/traefik/v2/pkg/log"
+	"github.com/opentracing/opentracing-go"
 )
 
 var storesMu sync.Mutex
@@ -119,10 +120,17 @@ func (ls *LabelStore) MustLoadLabels(ctx context.Context, uid, requestID string)
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	fetchLabels := false
+
 	if e.value == nil || e.expireAt.Before(now) {
 		labels, ts := ls.mustFetchLabels(ctx, uid, requestID)
 		e.value = labels
 		e.expireAt = time.Unix(ts, 0).Add(ls.expiration)
+		fetchLabels = true
+	}
+
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span.SetTag("fetched-labels", fetchLabels)
 	}
 
 	return e.value
