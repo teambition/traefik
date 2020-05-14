@@ -24,9 +24,11 @@ func New(defaultServiceName string, handler http.Handler) *Balancer {
 
 type sliceHandler []*namedHandler
 
-func (s sliceHandler) Match(name string) *namedHandler {
+func (s sliceHandler) Match(name string, fallback bool) *namedHandler {
 	for _, handler := range s {
-		if strings.HasPrefix(name, handler.name) {
+		if fallback && strings.HasPrefix(name, handler.name) {
+			return handler
+		} else if name == handler.name {
 			return handler
 		}
 	}
@@ -50,22 +52,30 @@ type Balancer struct {
 
 func (b *Balancer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// X-Canary: beta
-	// X-Canary: label=beta; product=urbs; uid=5c4057f0be825b390667abee; ...
-	label := req.Header.Get(labelKey)
-	if label != "" && strings.HasPrefix(label, "label=") {
-		label = label[6:]
+	// X-Canary: label=beta; product=urbs; uid=5c4057f0be825b390667abee; nofallback ...
+	label := ""
+	fallback := true
+	for i, v := range req.Header.Values(labelKey) {
+		switch {
+		case strings.HasPrefix(v, "label="):
+			label = v[6:]
+		case v == "nofallback":
+			fallback = false
+		case i == 0:
+			label = v
+		}
 	}
 
 	name := b.serviceName
 	if label != "" {
 		name = fmt.Sprintf("%s-%s", name, label)
-		if handler := b.handlers.Match(name); handler != nil {
+		if handler := b.handlers.Match(name, fallback); handler != nil {
 			handler.ServeHTTP(w, req)
 			return
 		}
 	}
 
-	if b.defaultHandler != nil {
+	if b.defaultHandler != nil && (fallback || label == "") {
 		b.defaultHandler.ServeHTTP(w, req)
 		return
 	}

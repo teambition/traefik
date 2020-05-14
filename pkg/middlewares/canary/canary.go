@@ -14,7 +14,7 @@ import (
 	"github.com/containous/traefik/v2/pkg/log"
 	"github.com/containous/traefik/v2/pkg/middlewares"
 	"github.com/containous/traefik/v2/pkg/middlewares/accesslog"
-	"github.com/containous/traefik/v2/pkg/tracing"
+	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 )
 
@@ -84,7 +84,7 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 
 // GetTracingInformation implements Tracable interface
 func (c *Canary) GetTracingInformation() (string, ext.SpanKindEnum) {
-	return c.name, tracing.SpanKindNoneEnum
+	return c.name, ext.SpanKindRPCClientEnum
 }
 
 func (c *Canary) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
@@ -103,9 +103,15 @@ func (c *Canary) processRequestID(rw http.ResponseWriter, req *http.Request) {
 		rw.Header().Set(headerXRequestID, requestID)
 	}
 
+	if span := opentracing.SpanFromContext(req.Context()); span != nil {
+		span.SetTag("component", "Canary")
+		span.SetTag("x-request-id", requestID)
+	}
+
 	if logData := accesslog.GetLogData(req); logData != nil {
 		logData.Core["XRequestID"] = requestID
 		logData.Core["UserAgent"] = req.Header.Get(headerUA)
+		logData.Core["Referer"] = req.Header.Get("Referer")
 	}
 }
 
@@ -119,8 +125,8 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 		// load user's labels and update to header when work as public gateway.
 		info.fromHeader(req.Header, false)
 		if info.label == "" {
-			if cookie, _ := req.Cookie(headerXCanary); cookie != nil && validLabelReg.MatchString(cookie.Value) {
-				info.label = cookie.Value
+			if cookie, _ := req.Cookie(headerXCanary); cookie != nil && cookie.Value != "" {
+				info.feed(strings.Split(cookie.Value, ","), false)
 			}
 		}
 
@@ -155,8 +161,10 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 type userInfo struct {
 	UID0 string `json:"uid"`
 	UID1 string `json:"_userId"`
-	UID2 string `json:"sub"`
-	UID3 string `json:"id"`
+	UID2 string `json:"userId"`
+	UID3 string `json:"user_id"`
+	UID4 string `json:"sub"`
+	UID5 string `json:"id"`
 }
 
 func extractUserID(req *http.Request, uidCookies []string) string {
@@ -221,6 +229,10 @@ func extractUserIDFromBase64(s string) string {
 				return user.UID2
 			case user.UID3 != "":
 				return user.UID3
+			case user.UID4 != "":
+				return user.UID4
+			case user.UID5 != "":
+				return user.UID5
 			}
 		}
 	}
@@ -228,19 +240,25 @@ func extractUserIDFromBase64(s string) string {
 }
 
 type canaryHeader struct {
-	label   string
-	product string
-	uid     string
-	client  string
-	channel string
-	app     string
-	version string
+	label      string
+	product    string
+	uid        string
+	client     string
+	channel    string
+	app        string
+	version    string
+	nofallback bool
+	testing    bool
 }
 
 // uid and product will not be extracted
 func (ch *canaryHeader) fromHeader(header http.Header, trust bool) {
-	vals := header.Values(headerXCanary)
-	for _, v := range vals {
+	ch.feed(header.Values(headerXCanary), trust)
+}
+
+func (ch *canaryHeader) feed(vals []string, trust bool) {
+	for i, v := range vals {
+		v = strings.TrimSpace(v)
 		switch {
 		case strings.HasPrefix(v, "label="):
 			ch.label = v[6:]
@@ -256,8 +274,12 @@ func (ch *canaryHeader) fromHeader(header http.Header, trust bool) {
 			ch.app = v[4:]
 		case strings.HasPrefix(v, "version="):
 			ch.version = v[8:]
+		case v == "nofallback":
+			ch.nofallback = true
+		case v == "testing":
+			ch.testing = true
 		default:
-			if len(vals) == 1 && validLabelReg.MatchString(v) {
+			if i == 0 && validLabelReg.MatchString(v) {
 				ch.label = v
 			}
 		}
@@ -287,5 +309,11 @@ func (ch *canaryHeader) intoHeader(header http.Header) {
 	}
 	if ch.version != "" {
 		header.Add(headerXCanary, fmt.Sprintf("version=%s", ch.version))
+	}
+	if ch.nofallback {
+		header.Add(headerXCanary, "nofallback")
+	}
+	if ch.testing {
+		header.Add(headerXCanary, "testing")
 	}
 }

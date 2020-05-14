@@ -14,10 +14,7 @@ import (
 	"time"
 
 	"github.com/containous/traefik/v2/pkg/log"
-	"github.com/containous/traefik/v2/pkg/tracing"
 	"github.com/containous/traefik/v2/pkg/version"
-	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
 )
 
 func init() {
@@ -94,19 +91,6 @@ func getUserLabels(ctx context.Context, api, xRequestID string) (*labelsRes, err
 		return nil, err
 	}
 
-	var sp opentracing.Span
-	if tr, _ := tracing.FromContext(req.Context()); tr != nil {
-		opParts := []string{"label"}
-		span, re, finish := tr.StartSpanf(req, ext.SpanKindRPCClientEnum, "canary", opParts, "/")
-		sp = span
-		defer finish()
-
-		span.SetTag(headerXRequestID, xRequestID)
-		ext.HTTPUrl.Set(span, re.URL.String())
-		tracing.InjectRequestHeaders(re)
-		req = re
-	}
-
 	req.Header.Set(headerUA, userAgent)
 	req.Header.Set(headerXRequestID, xRequestID)
 	resp, err := client.Do(req)
@@ -120,9 +104,6 @@ func getUserLabels(ctx context.Context, api, xRequestID string) (*labelsRes, err
 	}
 
 	hc.Reset()
-	if sp != nil {
-		tracing.LogResponseCode(sp, resp.StatusCode)
-	}
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
