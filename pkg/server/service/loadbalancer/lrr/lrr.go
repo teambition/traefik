@@ -8,10 +8,6 @@ import (
 	"strings"
 )
 
-const labelKey = "X-Canary"
-
-var isPortReg = regexp.MustCompile(`^\d+$`)
-
 type namedHandler struct {
 	http.Handler
 	name string
@@ -51,21 +47,7 @@ type Balancer struct {
 }
 
 func (b *Balancer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	// X-Canary: beta
-	// X-Canary: label=beta; product=urbs; uid=5c4057f0be825b390667abee; nofallback ...
-	label := ""
-	fallback := true
-	for i, v := range req.Header.Values(labelKey) {
-		switch {
-		case strings.HasPrefix(v, "label="):
-			label = v[6:]
-		case v == "nofallback":
-			fallback = false
-		case i == 0:
-			label = v
-		}
-	}
-
+	label, fallback := extractLabel(req.Header)
 	name := b.serviceName
 	if label != "" {
 		name = fmt.Sprintf("%s-%s", name, label)
@@ -90,6 +72,8 @@ func (b *Balancer) AddService(fullServiceName string, handler http.Handler) {
 	b.handlers = b.handlers.AppendAndSort(h)
 }
 
+var isPortReg = regexp.MustCompile(`^\d+$`)
+
 // full service name format (build by fullServiceName function): namespace-serviceName-port
 func removeNsPort(fullServiceName, ServiceName string) string {
 	i := strings.Index(fullServiceName, ServiceName)
@@ -97,4 +81,34 @@ func removeNsPort(fullServiceName, ServiceName string) string {
 		fullServiceName = fullServiceName[i:] // remove namespace
 	}
 	return strings.TrimRight(fullServiceName, "0123456789-") // remove port
+}
+
+func extractLabel(header http.Header) (string, bool) {
+	// standard specification, reference to https://www.w3.org/TR/trace-context/#tracestate-header
+	// X-Canary: label=beta,product=urbs,uid=5c4057f0be825b390667abee,nofallback ...
+	// and compatible with
+	// X-Canary: beta
+	// X-Canary: label=beta; product=urbs; uid=5c4057f0be825b390667abee; nofallback ...
+	label := ""
+	fallback := true
+	vals := header.Values("X-Canary")
+	if len(vals) == 1 {
+		if strings.IndexByte(vals[0], ',') > 0 {
+			vals = strings.Split(vals[0], ",")
+		} else if strings.IndexByte(vals[0], ';') > 0 {
+			vals = strings.Split(vals[0], ";")
+		}
+	}
+	for i, v := range vals {
+		v = strings.TrimSpace(v)
+		switch {
+		case strings.HasPrefix(v, "label="):
+			label = v[6:]
+		case v == "nofallback":
+			fallback = false
+		case i == 0:
+			label = v
+		}
+	}
+	return label, fallback
 }

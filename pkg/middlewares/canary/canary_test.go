@@ -66,6 +66,20 @@ func TestCanaryHeader(t *testing.T) {
 		a.Equal("version", ch.version)
 		a.True(ch.nofallback)
 		a.True(ch.testing)
+
+		ch = &canaryHeader{}
+		h = http.Header{}
+		h.Set(headerXCanary, "label=label,version=version,app=app, channel=channel,client=client, uid=uid,product=product,ip=ip,nofallback,testing")
+		ch.fromHeader(h, false)
+		a.Equal("label", ch.label)
+		a.Equal("", ch.product)
+		a.Equal("", ch.uid)
+		a.Equal("client", ch.client)
+		a.Equal("channel", ch.channel)
+		a.Equal("app", ch.app)
+		a.Equal("version", ch.version)
+		a.True(ch.nofallback)
+		a.True(ch.testing)
 	})
 
 	t.Run("intoHeader should work", func(t *testing.T) {
@@ -74,7 +88,7 @@ func TestCanaryHeader(t *testing.T) {
 		ch := &canaryHeader{}
 		h := http.Header{}
 		ch.intoHeader(h)
-		a.Equal(0, len(h.Values(headerXCanary)))
+		a.Equal("", h.Get(headerXCanary))
 
 		ch = &canaryHeader{
 			label:   "label",
@@ -84,7 +98,7 @@ func TestCanaryHeader(t *testing.T) {
 		}
 		h = http.Header{}
 		ch.intoHeader(h)
-		a.Equal(4, len(h.Values(headerXCanary)))
+		a.Equal("label=label,product=product,uid=uid,channel=channel", h.Get(headerXCanary))
 
 		chn := &canaryHeader{}
 		chn.fromHeader(h, true)
@@ -103,7 +117,7 @@ func TestCanaryHeader(t *testing.T) {
 		}
 		h = http.Header{}
 		ch.intoHeader(h)
-		a.Equal(9, len(h.Values(headerXCanary)))
+		a.Equal("label=label,product=product,uid=uid,client=client,channel=channel,app=app,version=version,nofallback,testing", h.Get(headerXCanary))
 
 		chn = &canaryHeader{}
 		chn.fromHeader(h, true)
@@ -256,8 +270,7 @@ func TestCanary(t *testing.T) {
 
 		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
 		rw = httptest.NewRecorder()
-		req.Header.Set(headerXCanary, "label=beta")
-		req.Header.Add(headerXCanary, "client=iOS")
+		req.Header.Set(headerXCanary, "label=beta,client=iOS")
 		req.AddCookie(&http.Cookie{Name: headerXCanary, Value: "stable"})
 		c.processCanary(rw, req)
 		ch = &canaryHeader{}

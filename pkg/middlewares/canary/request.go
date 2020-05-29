@@ -15,6 +15,7 @@ import (
 
 	"github.com/containous/traefik/v2/pkg/log"
 	"github.com/containous/traefik/v2/pkg/version"
+	"github.com/opentracing/opentracing-go"
 )
 
 func init() {
@@ -93,6 +94,13 @@ func getUserLabels(ctx context.Context, api, xRequestID string) (*labelsRes, err
 
 	req.Header.Set(headerUA, userAgent)
 	req.Header.Set(headerXRequestID, xRequestID)
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		opentracing.GlobalTracer().Inject(
+			span.Context(),
+			opentracing.HTTPHeaders,
+			opentracing.HTTPHeadersCarrier(req.Header))
+	}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		if err.(*url.Error).Unwrap() == context.Canceled {

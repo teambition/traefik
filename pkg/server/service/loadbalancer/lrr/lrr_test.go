@@ -95,4 +95,53 @@ func TestLRRBalancer(t *testing.T) {
 		h = s.Match("lr", true)
 		a.Nil(h)
 	})
+
+	t.Run("extractLabel should work", func(t *testing.T) {
+		a := assert.New(t)
+		header := http.Header{}
+		label, fallback := extractLabel(header)
+		a.Equal("", label)
+		a.True(fallback)
+
+		// X-Canary: dev
+		header.Set("X-Canary", "dev")
+		label, fallback = extractLabel(header)
+		a.Equal("dev", label)
+		a.True(fallback)
+
+		// X-Canary: label=beta,product=urbs,uid=5c4057f0be825b390667abee,nofallback ...
+		header = http.Header{}
+		header.Set("X-Canary", "label=beta,product=urbs,uid=5c4057f0be825b390667abee,nofallback")
+		label, fallback = extractLabel(header)
+		a.Equal("beta", label)
+		a.False(fallback)
+
+		header = http.Header{}
+		header.Set("X-Canary", "label=dev,product=urbs,uid=5c4057f0be825b390667abee")
+		label, fallback = extractLabel(header)
+		a.Equal("dev", label)
+		a.True(fallback)
+
+		header = http.Header{}
+		header.Set("X-Canary", "product=urbs,uid=5c4057f0be825b390667abee,nofallback,label=dev")
+		label, fallback = extractLabel(header)
+		a.Equal("dev", label)
+		a.False(fallback)
+
+		// X-Canary: label=beta; product=urbs; uid=5c4057f0be825b390667abee; nofallback ...
+		header = http.Header{}
+		header.Set("X-Canary", "label=beta; product=urbs; uid=5c4057f0be825b390667abee; nofallback")
+		label, fallback = extractLabel(header)
+		a.Equal("beta", label)
+		a.False(fallback)
+
+		header = http.Header{}
+		header.Add("X-Canary", "label=beta")
+		header.Add("X-Canary", "product=urbs")
+		header.Add("X-Canary", "uid=5c4057f0be825b390667abee")
+		header.Add("X-Canary", "nofallback")
+		label, fallback = extractLabel(header)
+		a.Equal("beta", label)
+		a.False(fallback)
+	})
 }

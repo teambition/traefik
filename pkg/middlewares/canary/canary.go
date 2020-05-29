@@ -50,7 +50,7 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
 
 	if cfg.Product == "" {
-		return nil, fmt.Errorf("product name required for Canary middleware")
+		return nil, fmt.Errorf("product name required for canary middleware")
 	}
 
 	expiration := time.Duration(cfg.CacheExpiration)
@@ -97,7 +97,13 @@ func (c *Canary) processRequestID(rw http.ResponseWriter, req *http.Request) {
 	requestID := req.Header.Get(headerXRequestID)
 	if c.addRequestID {
 		if requestID == "" {
-			requestID = generatorUUID()
+			// extract trace-id as x-request-id
+			// https://www.w3.org/TR/trace-context/#traceparent-header
+			if traceparent := req.Header.Get("traceparent"); len(traceparent) >= 55 {
+				requestID = traceparent[3:35]
+			} else {
+				requestID = generatorUUID()
+			}
 			req.Header.Set(headerXRequestID, requestID)
 		}
 		rw.Header().Set(headerXRequestID, requestID)
@@ -112,6 +118,9 @@ func (c *Canary) processRequestID(rw http.ResponseWriter, req *http.Request) {
 		logData.Core["XRequestID"] = requestID
 		logData.Core["UserAgent"] = req.Header.Get(headerUA)
 		logData.Core["Referer"] = req.Header.Get("Referer")
+		if traceparent := req.Header.Get("traceparent"); traceparent != "" {
+			logData.Core["Traceparent"] = traceparent
+		}
 	}
 }
 
@@ -136,10 +145,10 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 		if info.label == "" && info.uid != "" {
 			labels := c.ls.MustLoadLabels(req.Context(), info.uid, req.Header.Get(headerXRequestID))
 			for _, l := range labels {
-				if info.client != "" && !l.MatchClient(info.client) {
+				if !l.MatchClient(info.client) {
 					continue
 				}
-				if info.channel != "" && !l.MatchChannel(info.channel) {
+				if !l.MatchChannel(info.channel) {
 					continue
 				}
 				info.label = l.Label
@@ -154,7 +163,7 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 
 	if logData := accesslog.GetLogData(req); logData != nil {
 		logData.Core["UID"] = info.uid
-		logData.Core["XCanary"] = req.Header.Values(headerXCanary)
+		logData.Core["XCanary"] = info.String()
 	}
 }
 
@@ -239,6 +248,12 @@ func extractUserIDFromBase64(s string) string {
 	return ""
 }
 
+// Canary Header specification, reference to https://www.w3.org/TR/trace-context/#tracestate-header
+// X-Canary: label=beta,nofallback
+// X-Canary: client=iOS,channel=stable,app=teambition,version=v10.0
+// full example
+// X-Canary: label=beta,product=urbs,uid=5c4057f0be825b390667abee,client=iOS,channel=stable,app=teambition,version=v10.0,nofallback,testing
+// support fields: label, product, uid, client, channel, app, version, nofallback, testing
 type canaryHeader struct {
 	label      string
 	product    string
@@ -252,8 +267,32 @@ type canaryHeader struct {
 }
 
 // uid and product will not be extracted
+// standard
+// X-Canary: label=beta,product=urbs,uid=5c4057f0be825b390667abee,nofallback ...
+// and compatible with
+// X-Canary: beta
+// or
+// X-Canary: label=beta; product=urbs; uid=5c4057f0be825b390667abee; nofallback ...
+// or
+// X-Canary: label=beta
+// X-Canary: product=urbs
+// X-Canary: uid=5c4057f0be825b390667abee
+// X-Canary: nofallback
 func (ch *canaryHeader) fromHeader(header http.Header, trust bool) {
-	ch.feed(header.Values(headerXCanary), trust)
+	vals := header.Values(headerXCanary)
+	if len(vals) == 1 {
+		if strings.IndexByte(vals[0], ',') > 0 {
+			vals = strings.Split(vals[0], ",")
+		} else if strings.IndexByte(vals[0], ';') > 0 {
+			vals = strings.Split(vals[0], ";")
+		}
+	}
+	ch.feed(vals, trust)
+}
+
+// label should not be empty
+func (ch *canaryHeader) intoHeader(header http.Header) {
+	header.Set(headerXCanary, ch.String())
 }
 
 func (ch *canaryHeader) feed(vals []string, trust bool) {
@@ -287,33 +326,35 @@ func (ch *canaryHeader) feed(vals []string, trust bool) {
 }
 
 // label should not be empty
-func (ch *canaryHeader) intoHeader(header http.Header) {
+func (ch *canaryHeader) String() string {
 	if ch.label == "" {
-		return
+		return ""
 	}
-	header.Set(headerXCanary, fmt.Sprintf("label=%s", ch.label))
+	vals := make([]string, 0, 4)
+	vals = append(vals, fmt.Sprintf("label=%s", ch.label))
 	if ch.product != "" {
-		header.Add(headerXCanary, fmt.Sprintf("product=%s", ch.product))
+		vals = append(vals, fmt.Sprintf("product=%s", ch.product))
 	}
 	if ch.uid != "" {
-		header.Add(headerXCanary, fmt.Sprintf("uid=%s", ch.uid))
+		vals = append(vals, fmt.Sprintf("uid=%s", ch.uid))
 	}
 	if ch.client != "" {
-		header.Add(headerXCanary, fmt.Sprintf("client=%s", ch.client))
+		vals = append(vals, fmt.Sprintf("client=%s", ch.client))
 	}
 	if ch.channel != "" {
-		header.Add(headerXCanary, fmt.Sprintf("channel=%s", ch.channel))
+		vals = append(vals, fmt.Sprintf("channel=%s", ch.channel))
 	}
 	if ch.app != "" {
-		header.Add(headerXCanary, fmt.Sprintf("app=%s", ch.app))
+		vals = append(vals, fmt.Sprintf("app=%s", ch.app))
 	}
 	if ch.version != "" {
-		header.Add(headerXCanary, fmt.Sprintf("version=%s", ch.version))
+		vals = append(vals, fmt.Sprintf("version=%s", ch.version))
 	}
 	if ch.nofallback {
-		header.Add(headerXCanary, "nofallback")
+		vals = append(vals, "nofallback")
 	}
 	if ch.testing {
-		header.Add(headerXCanary, "testing")
+		vals = append(vals, "testing")
 	}
+	return strings.Join(vals, ",")
 }
