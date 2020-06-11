@@ -121,7 +121,7 @@ func (rl *rateLimiter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		bucket = rlSource.(*rate.Limiter)
 	} else {
 		bucket = rate.NewLimiter(rl.rate, int(rl.burst))
-		if err := rl.buckets.Set(source, bucket, int(rl.maxDelay)*10+1); err != nil {
+		if err := rl.buckets.Set(source, bucket, int(rl.maxDelay/time.Second)*10+1); err != nil {
 			logger.Errorf("could not insert bucket: %v", err)
 			http.Error(w, "could not insert bucket", http.StatusInternalServerError)
 			return

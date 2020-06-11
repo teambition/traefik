@@ -23,7 +23,7 @@ const (
 	headerAuth                = "Authorization"
 	headerUA                  = "User-Agent"
 	headerXCanary             = "X-Canary"
-	headerXRequestID          = "X-Request-ID"
+	headerXRequestID          = "X-Request-Id"
 	defaultCacheSize          = 100000
 	defaultExpiration         = time.Minute * 10
 	defaultCacheCleanDuration = time.Minute * 20
