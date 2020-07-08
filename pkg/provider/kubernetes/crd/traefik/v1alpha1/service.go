@@ -69,7 +69,7 @@ type WeightedRoundRobin struct {
 // +k8s:deepcopy-gen=true
 
 // LabeledRoundRobin defines a labeled load-balancer of services, which select service by label.
-// Label will be extract from request header or cookie, with key `X-Canary-Label`.
+// Label will be extract from request header or cookie, with key `X-Canary`.
 // services should be named as `{defaultService}-{label}`. Ex. "myservice-stable", "myservice-beta", "myservice-dev"
 type LabeledRoundRobin struct {
 	Service

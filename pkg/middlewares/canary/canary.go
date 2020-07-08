@@ -2,9 +2,12 @@ package canary
 
 import (
 	"context"
+	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"regexp"
 	"strings"
@@ -14,6 +17,7 @@ import (
 	"github.com/containous/traefik/v2/pkg/log"
 	"github.com/containous/traefik/v2/pkg/middlewares"
 	"github.com/containous/traefik/v2/pkg/middlewares/accesslog"
+	"github.com/containous/traefik/v2/pkg/server/cookie"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 )
@@ -42,6 +46,7 @@ type Canary struct {
 	canaryResponseHeader bool
 	loadLabels           bool
 	ls                   *LabelStore
+	sticky               *dynamic.Sticky
 	next                 http.Handler
 }
 
@@ -74,7 +79,16 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 		loadLabels:           cfg.Server != "",
 		addRequestID:         cfg.AddRequestID,
 		canaryResponseHeader: cfg.CanaryResponseHeader,
+		sticky:               cfg.Sticky,
 	}
+
+	if cfg.Sticky != nil {
+		c.sticky.Cookie.Name = cookie.GetName(cfg.Sticky.Cookie.Name, name)
+		if !strSliceHas(c.uidCookies, c.sticky.Cookie.Name) {
+			c.uidCookies = append(c.uidCookies, c.sticky.Cookie.Name)
+		}
+	}
+
 	if c.loadLabels {
 		c.ls = NewLabelStore(logger, cfg, expiration, cacheCleanDuration)
 	}
@@ -142,6 +156,18 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 		info.product = c.product
 		info.uid = extractUserID(req, c.uidCookies)
 
+		if info.uid == "" && c.sticky != nil {
+			addr := req.Header.Get("X-Real-Ip")
+			if addr == "" {
+				addr = req.Header.Get("X-Forwarded-For")
+			}
+			if addr == "" {
+				addr, _, _ = net.SplitHostPort(req.RemoteAddr)
+			}
+			info.uid = anonymousID(addr, req.Header.Get(headerUA), req.Header.Get("Cookie"), time.Now().Format(time.RFC822))
+			c.addSticky(info.uid, rw)
+		}
+
 		if info.label == "" && info.uid != "" {
 			labels := c.ls.MustLoadLabels(req.Context(), info.uid, req.Header.Get(headerXRequestID))
 			for _, l := range labels {
@@ -167,13 +193,27 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (c *Canary) addSticky(id string, rw http.ResponseWriter) {
+	if data, err := json.Marshal(userInfo{UID5: id}); err == nil {
+		http.SetCookie(rw, &http.Cookie{
+			Name:     c.sticky.Cookie.Name,
+			Value:    base64.RawURLEncoding.EncodeToString(data),
+			Path:     "/",
+			MaxAge:   60 * 60 * 24 * 7,
+			Secure:   c.sticky.Cookie.Secure,
+			HttpOnly: c.sticky.Cookie.HTTPOnly,
+			SameSite: convertSameSite(c.sticky.Cookie.SameSite),
+		})
+	}
+}
+
 type userInfo struct {
-	UID0 string `json:"uid"`
-	UID1 string `json:"_userId"`
-	UID2 string `json:"userId"`
-	UID3 string `json:"user_id"`
-	UID4 string `json:"sub"`
-	UID5 string `json:"id"`
+	UID0 string `json:"uid,omitempty"`
+	UID1 string `json:"_userId,omitempty"`
+	UID2 string `json:"userId,omitempty"`
+	UID3 string `json:"user_id,omitempty"`
+	UID4 string `json:"sub,omitempty"`
+	UID5 string `json:"id,omitempty"`
 }
 
 func extractUserID(req *http.Request, uidCookies []string) string {
@@ -323,6 +363,9 @@ func (ch *canaryHeader) feed(vals []string, trust bool) {
 			}
 		}
 	}
+	if ch.testing && ch.label == "" {
+		ch.label = "testing"
+	}
 }
 
 // label should not be empty
@@ -357,4 +400,34 @@ func (ch *canaryHeader) String() string {
 		vals = append(vals, "testing")
 	}
 	return strings.Join(vals, ",")
+}
+
+func convertSameSite(sameSite string) http.SameSite {
+	switch sameSite {
+	case "none":
+		return http.SameSiteNoneMode
+	case "lax":
+		return http.SameSiteLaxMode
+	case "strict":
+		return http.SameSiteStrictMode
+	default:
+		return 0
+	}
+}
+
+func anonymousID(feeds ...string) string {
+	h := sha1.New()
+	for _, v := range feeds {
+		io.WriteString(h, v)
+	}
+	return fmt.Sprintf("anon-%x", h.Sum(nil))
+}
+
+func strSliceHas(s []string, t string) bool {
+	for _, v := range s {
+		if v == t {
+			return true
+		}
+	}
+	return false
 }

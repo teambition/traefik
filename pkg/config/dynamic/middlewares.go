@@ -516,4 +516,5 @@ type Canary struct {
 	MaxCacheSize         int            `json:"maxCacheSize,omitempty" toml:"maxCacheSize,omitempty" yaml:"maxCacheSize,omitempty" export:"true"`
 	CacheExpiration      types.Duration `json:"cacheExpiration,omitempty" toml:"cacheExpiration,omitempty" yaml:"cacheExpiration,omitempty" export:"true"`
 	CacheCleanDuration   types.Duration `json:"cacheCleanDuration,omitempty" toml:"cacheCleanDuration,omitempty" yaml:"cacheCleanDuration,omitempty" export:"true"`
+	Sticky               *Sticky        `json:"sticky,omitempty" toml:"sticky,omitempty" yaml:"sticky,omitempty" export:"true"`
 }

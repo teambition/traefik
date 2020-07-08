@@ -302,4 +302,40 @@ func TestCanary(t *testing.T) {
 		a.Equal("iOS", ch.client)
 		a.Equal("someuid", ch.uid)
 	})
+
+	t.Run("sticky should work", func(t *testing.T) {
+		a := assert.New(t)
+
+		cfg := dynamic.Canary{MaxCacheSize: 3, Server: "localhost", Product: "Urbs", Sticky: &dynamic.Sticky{
+			Cookie: &dynamic.Cookie{Name: "_urbs_"},
+		}}
+		c, err := New(context.Background(), next, cfg, "test")
+		c.ls.mustFetchLabels = func(ctx context.Context, uid, requestID string) ([]Label, int64) {
+			return []Label{{Label: uid}}, time.Now().Unix()
+		}
+		a.Nil(err)
+
+		req := httptest.NewRequest("GET", "http://example.com/foo", nil)
+		rw := httptest.NewRecorder()
+		c.processCanary(rw, req)
+		ch := &canaryHeader{}
+		ch.fromHeader(req.Header, true)
+		a.NotEqual("", ch.label)
+		a.Equal(ch.uid, ch.label)
+		a.Contains(rw.Header().Get("Set-Cookie"), "_urbs_=ey")
+
+		uid := ch.uid
+		cookies := rw.Result().Cookies()
+		a.Equal(1, len(cookies))
+		a.Equal("_urbs_", cookies[0].Name)
+
+		req = httptest.NewRequest("GET", "http://example.com/foo", nil)
+		req.AddCookie(cookies[0])
+		rw = httptest.NewRecorder()
+		c.processCanary(rw, req)
+		ch = &canaryHeader{}
+		ch.fromHeader(req.Header, true)
+		a.Equal(uid, ch.label)
+		a.Equal(ch.uid, ch.label)
+	})
 }
