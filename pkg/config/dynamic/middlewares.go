@@ -508,13 +508,20 @@ func (c *ClientTLS) CreateTLSConfig() (*tls.Config, error) {
 
 // Canary middleware settings.
 type Canary struct {
-	Product              string         `json:"product,omitempty" toml:"product,omitempty" yaml:"product,omitempty" export:"true"`
-	Server               string         `json:"server,omitempty" toml:"server,omitempty" yaml:"server,omitempty" export:"true"`
-	UIDCookies           []string       `json:"uidCookies,omitempty" toml:"uidCookies,omitempty" yaml:"uidCookies,omitempty" export:"true"`
-	AddRequestID         bool           `json:"addRequestID,omitempty" toml:"addRequestID,omitempty" yaml:"addRequestID,omitempty" export:"true"`
-	CanaryResponseHeader bool           `json:"canaryResponseHeader,omitempty" toml:"canaryResponseHeader,omitempty" yaml:"canaryResponseHeader,omitempty" export:"true"`
-	MaxCacheSize         int            `json:"maxCacheSize,omitempty" toml:"maxCacheSize,omitempty" yaml:"maxCacheSize,omitempty" export:"true"`
-	CacheExpiration      types.Duration `json:"cacheExpiration,omitempty" toml:"cacheExpiration,omitempty" yaml:"cacheExpiration,omitempty" export:"true"`
-	CacheCleanDuration   types.Duration `json:"cacheCleanDuration,omitempty" toml:"cacheCleanDuration,omitempty" yaml:"cacheCleanDuration,omitempty" export:"true"`
-	Sticky               *Sticky        `json:"sticky,omitempty" toml:"sticky,omitempty" yaml:"sticky,omitempty" export:"true"`
+	Product              string         `json:"product,omitempty" toml:"product,omitempty" yaml:"product,omitempty"`
+	Server               string         `json:"server,omitempty" toml:"server,omitempty" yaml:"server,omitempty"`
+	UIDCookies           []string       `json:"uidCookies,omitempty" toml:"uidCookies,omitempty" yaml:"uidCookies,omitempty"`
+	AddRequestID         bool           `json:"addRequestID,omitempty" toml:"addRequestID,omitempty" yaml:"addRequestID,omitempty"`
+	CanaryResponseHeader bool           `json:"canaryResponseHeader,omitempty" toml:"canaryResponseHeader,omitempty" yaml:"canaryResponseHeader,omitempty"`
+	MaxCacheSize         int            `json:"maxCacheSize,omitempty" toml:"maxCacheSize,omitempty" yaml:"maxCacheSize,omitempty"`
+	CacheExpiration      types.Duration `json:"cacheExpiration,omitempty" toml:"cacheExpiration,omitempty" yaml:"cacheExpiration,omitempty"`
+	CacheCleanDuration   types.Duration `json:"cacheCleanDuration,omitempty" toml:"cacheCleanDuration,omitempty" yaml:"cacheCleanDuration,omitempty"`
+	Sticky               *Sticky        `json:"sticky,omitempty" toml:"sticky,omitempty" yaml:"sticky,omitempty"`
+	LabelsMap            *LabelsMap     `json:"labelsMap,omitempty" toml:"labelsMap,omitempty" yaml:"labelsMap,omitempty"`
+}
+
+// LabelsMap get canary labels from header with map
+type LabelsMap struct {
+	RequestHeaderName string            `json:"requestHeaderName,omitempty" toml:"requestHeaderName,omitempty" yaml:"requestHeaderName,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty" toml:"labels,omitempty" yaml:"labels,omitempty"`
 }

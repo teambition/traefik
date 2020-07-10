@@ -47,6 +47,7 @@ type Canary struct {
 	loadLabels           bool
 	ls                   *LabelStore
 	sticky               *dynamic.Sticky
+	labelsMap            *dynamic.LabelsMap
 	next                 http.Handler
 }
 
@@ -71,6 +72,12 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 		cfg.MaxCacheSize = defaultCacheSize
 	}
 
+	if cfg.LabelsMap != nil {
+		if cfg.LabelsMap.RequestHeaderName == "" || len(cfg.LabelsMap.Labels) == 0 {
+			cfg.LabelsMap = nil
+		}
+	}
+
 	c := &Canary{
 		name:                 name,
 		next:                 next,
@@ -80,6 +87,7 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 		addRequestID:         cfg.AddRequestID,
 		canaryResponseHeader: cfg.CanaryResponseHeader,
 		sticky:               cfg.Sticky,
+		labelsMap:            cfg.LabelsMap,
 	}
 
 	if cfg.Sticky != nil {
@@ -147,15 +155,26 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 	} else {
 		// load user's labels and update to header when work as public gateway.
 		info.fromHeader(req.Header, false)
+
+		// try load labels from cookie when not exists in request X-Canary header.
 		if info.label == "" {
 			if cookie, _ := req.Cookie(headerXCanary); cookie != nil && cookie.Value != "" {
 				info.feed(strings.Split(cookie.Value, ","), false)
 			}
 		}
 
+		// try load labels from config with header when not exists.
+		if info.label == "" && c.labelsMap != nil {
+			key := req.Header.Get(c.labelsMap.RequestHeaderName)
+			if vals := c.labelsMap.Labels[key]; vals != "" {
+				info.feed(strings.Split(vals, ","), false)
+			}
+		}
+
 		info.product = c.product
 		info.uid = extractUserID(req, c.uidCookies)
 
+		// anonymous user
 		if info.uid == "" && c.sticky != nil {
 			addr := req.Header.Get("X-Real-Ip")
 			if addr == "" {
@@ -168,6 +187,7 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 			c.addSticky(info.uid, rw)
 		}
 
+		// try load labels from server
 		if info.label == "" && info.uid != "" {
 			labels := c.ls.MustLoadLabels(req.Context(), info.uid, req.Header.Get(headerXRequestID))
 			for _, l := range labels {
