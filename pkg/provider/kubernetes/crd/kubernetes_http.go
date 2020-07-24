@@ -275,12 +275,9 @@ func (c configBuilder) buildLabeledLB(ctx context.Context, namespace string, tSe
 			continue // ignore invalid service
 		}
 
-		if k8sService == nil {
-			logger.Errorf("buildLabeledLB %s failed: %s,", fullName, "no k8s service")
-			continue // ignore invalid service
+		if k8sService != nil {
+			conf[fullName] = k8sService
 		}
-
-		conf[fullName] = k8sService
 		labeledServices = append(labeledServices, fullName)
 	}
 
