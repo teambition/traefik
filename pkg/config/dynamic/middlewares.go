@@ -277,6 +277,7 @@ func (s *IPStrategy) Get() (ip.Strategy, error) {
 type IPWhiteList struct {
 	SourceRange []string    `json:"sourceRange,omitempty" toml:"sourceRange,omitempty" yaml:"sourceRange,omitempty"`
 	IPStrategy  *IPStrategy `json:"ipStrategy,omitempty" toml:"ipStrategy,omitempty" yaml:"ipStrategy,omitempty"  label:"allowEmpty"`
+	Redirect    string      `json:"redirect,omitempty" toml:"redirect,omitempty" yaml:"redirect,omitempty"`
 }
 
 // +k8s:deepcopy-gen=true
