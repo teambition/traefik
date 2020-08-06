@@ -73,7 +73,7 @@ func (l *Label) MatchChannel(channel string) bool {
 }
 
 // NewLabelStore ...
-func NewLabelStore(logger log.Logger, cfg dynamic.Canary, expiration, cacheCleanDuration time.Duration) *LabelStore {
+func NewLabelStore(logger log.Logger, cfg dynamic.Canary, expiration, cacheCleanDuration time.Duration, name string) *LabelStore {
 	product := cfg.Product
 	apiURL := cfg.Server
 	// apiURL ex. https://labelServerHost/api/labels?uid=%s&product=%s
@@ -86,7 +86,7 @@ func NewLabelStore(logger log.Logger, cfg dynamic.Canary, expiration, cacheClean
 
 	storesMu.Lock()
 	// LabelStores share Store with same apiURL, but always update Store'config to latest
-	s, ok := stores[apiURL]
+	s, ok := stores[name]
 	if !ok {
 		s = &Store{
 			maxCacheSize:       cfg.MaxCacheSize,
@@ -95,7 +95,7 @@ func NewLabelStore(logger log.Logger, cfg dynamic.Canary, expiration, cacheClean
 			liveMap:            make(map[string]*entry),
 			staleMap:           make(map[string]*entry),
 		}
-		stores[apiURL] = s
+		stores[name] = s
 	} else {
 		s.updateConfig(cfg.MaxCacheSize, cacheCleanDuration)
 	}

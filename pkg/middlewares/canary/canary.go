@@ -98,7 +98,7 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 	}
 
 	if c.loadLabels {
-		c.ls = NewLabelStore(logger, cfg, expiration, cacheCleanDuration)
+		c.ls = NewLabelStore(logger, cfg, expiration, cacheCleanDuration, name)
 	}
 	logger.Debugf("Add canary middleware: %v, %v, %v", cfg, expiration, cacheCleanDuration)
 	return c, nil
@@ -137,6 +137,7 @@ func (c *Canary) processRequestID(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	if logData := accesslog.GetLogData(req); logData != nil {
+		logData.Core["XRealIp"] = req.Header.Get("X-Real-Ip")
 		logData.Core["XRequestID"] = requestID
 		logData.Core["UserAgent"] = req.Header.Get(headerUA)
 		logData.Core["Referer"] = req.Header.Get("Referer")

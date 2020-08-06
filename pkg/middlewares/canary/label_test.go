@@ -39,7 +39,7 @@ func TestLabelStore(t *testing.T) {
 		a := assert.New(t)
 
 		cfg := dynamic.Canary{MaxCacheSize: 3, Server: "localhost1", Product: "T"}
-		ls := NewLabelStore(logrus.StandardLogger(), cfg, time.Second, time.Second*2)
+		ls := NewLabelStore(logrus.StandardLogger(), cfg, time.Second, time.Second*2, "canary-test")
 		ls.mustFetchLabels = func(ctx context.Context, uid, requestID string) ([]Label, int64) {
 			return []Label{{Label: requestID}}, time.Now().Unix()
 		}
@@ -84,7 +84,7 @@ func TestLabelStore(t *testing.T) {
 		a := assert.New(t)
 
 		cfg := dynamic.Canary{MaxCacheSize: 3, Server: "localhost2", Product: "T"}
-		ls := NewLabelStore(logrus.StandardLogger(), cfg, time.Second, time.Second*2)
+		ls := NewLabelStore(logrus.StandardLogger(), cfg, time.Second, time.Second*2, "canary-test2")
 		ls.mustFetchLabels = func(ctx context.Context, uid, requestID string) ([]Label, int64) {
 			return []Label{{Label: requestID}}, time.Now().Unix()
 		}
