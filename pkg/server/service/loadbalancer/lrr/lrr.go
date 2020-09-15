@@ -22,9 +22,9 @@ type sliceHandler []*namedHandler
 
 func (s sliceHandler) Match(name string, fallback bool) *namedHandler {
 	for _, handler := range s {
-		if fallback && strings.HasPrefix(name, handler.name) {
+		if name == handler.name {
 			return handler
-		} else if name == handler.name {
+		} else if fallback && strings.HasPrefix(name, handler.name) {
 			return handler
 		}
 	}
