@@ -301,6 +301,24 @@ func TestCanary(t *testing.T) {
 		a.Equal("Urbs", ch.product)
 		a.Equal("iOS", ch.client)
 		a.Equal("someuid", ch.uid)
+
+		req = httptest.NewRequest("GET", "http://example.com/foo?X-Canary=label=beta,client=iOS&x=y", nil)
+		rw = httptest.NewRecorder()
+		req.Header.Set("Authorization", fmt.Sprintf("OAuth %s", testToken))
+		c.processCanary(rw, req)
+		ch = &canaryHeader{}
+		ch.fromHeader(req.Header, true)
+		a.Equal("beta", ch.label)
+		a.Equal("Urbs", ch.product)
+		a.Equal("iOS", ch.client)
+		a.Equal("someuid", ch.uid)
+		ch = &canaryHeader{}
+		ch.fromHeader(rw.Header(), true)
+		a.Equal("beta", ch.label)
+		a.Equal("Urbs", ch.product)
+		a.Equal("iOS", ch.client)
+		a.Equal("someuid", ch.uid)
+
 	})
 
 	t.Run("sticky should work", func(t *testing.T) {

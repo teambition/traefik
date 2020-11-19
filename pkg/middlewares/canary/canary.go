@@ -27,6 +27,7 @@ const (
 	headerAuth                = "Authorization"
 	headerUA                  = "User-Agent"
 	headerXCanary             = "X-Canary"
+	queryXCanary              = "X-Canary"
 	headerXRequestID          = "X-Request-Id"
 	defaultCacheSize          = 100000
 	defaultExpiration         = time.Minute * 10
@@ -161,6 +162,12 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 		if info.label == "" {
 			if cookie, _ := req.Cookie(headerXCanary); cookie != nil && cookie.Value != "" {
 				info.feed(strings.Split(cookie.Value, ","), false)
+			}
+		}
+		// try load labels from query when not exists in request X-Canary header and cookie.
+		if info.label == "" {
+			if query := req.URL.Query().Get(queryXCanary); query != "" {
+				info.feed(strings.Split(query, ","), false)
 			}
 		}
 
