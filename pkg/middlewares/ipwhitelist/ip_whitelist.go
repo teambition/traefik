@@ -24,6 +24,7 @@ type ipWhiteLister struct {
 	whiteLister *ip.Checker
 	strategy    ip.Strategy
 	name        string
+	redirect    string
 }
 
 // New builds a new IPWhiteLister given a list of CIDR-Strings to whitelist.
@@ -52,6 +53,7 @@ func New(ctx context.Context, next http.Handler, config dynamic.IPWhiteList, nam
 		whiteLister: checker,
 		next:        next,
 		name:        name,
+		redirect:    config.Redirect,
 	}, nil
 }
 
@@ -68,7 +70,7 @@ func (wl *ipWhiteLister) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		logMessage := fmt.Sprintf("rejecting request %+v: %v", req, err)
 		logger.Debug(logMessage)
 		tracing.SetErrorWithEvent(req, logMessage)
-		reject(ctx, rw)
+		reject(ctx, rw, req, wl.redirect)
 		return
 	}
 	logger.Debugf("Accept %s: %+v", wl.strategy.GetIP(req), req)
@@ -76,7 +78,12 @@ func (wl *ipWhiteLister) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	wl.next.ServeHTTP(rw, req)
 }
 
-func reject(ctx context.Context, rw http.ResponseWriter) {
+func reject(ctx context.Context, rw http.ResponseWriter, req *http.Request, redirect string) {
+	if redirect != "" {
+		http.Redirect(rw, req, redirect, http.StatusTemporaryRedirect)
+		return
+	}
+
 	statusCode := http.StatusForbidden
 
 	rw.WriteHeader(statusCode)
