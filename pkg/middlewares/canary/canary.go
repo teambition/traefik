@@ -43,6 +43,7 @@ type Canary struct {
 	product              string
 	uidCookies           []string
 	addRequestID         bool
+	forwardLabel         bool
 	canaryResponseHeader bool
 	loadLabels           bool
 	ls                   *LabelStore
@@ -85,6 +86,7 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 		uidCookies:           cfg.UIDCookies,
 		loadLabels:           cfg.Server != "",
 		addRequestID:         cfg.AddRequestID,
+		forwardLabel:         cfg.ForwardLabel,
 		canaryResponseHeader: cfg.CanaryResponseHeader,
 		sticky:               cfg.Sticky,
 		labelsMap:            cfg.LabelsMap,
@@ -117,12 +119,20 @@ func (c *Canary) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 func (c *Canary) processRequestID(rw http.ResponseWriter, req *http.Request) {
 	requestID := req.Header.Get(headerXRequestID)
+	if requestID == "" {
+		requestID = req.Header.Get("X-CA-Request-Id")
+	}
+	if requestID == "" {
+		requestID = req.Header.Get("Request-Id")
+	}
 	if c.addRequestID {
 		if requestID == "" {
 			// extract trace-id as x-request-id
 			// https://www.w3.org/TR/trace-context/#traceparent-header
 			if traceparent := req.Header.Get("traceparent"); len(traceparent) >= 55 {
 				requestID = traceparent[3:35]
+			} else if traceid := req.Header.Get("eagleeye-traceid"); len(traceid) > 0 {
+				requestID = traceid
 			} else {
 				requestID = generatorUUID()
 			}
@@ -150,7 +160,7 @@ func (c *Canary) processRequestID(rw http.ResponseWriter, req *http.Request) {
 func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 	info := &canaryHeader{}
 
-	if !c.loadLabels {
+	if c.forwardLabel {
 		// just trust the canary header when work as internal gateway.
 		info.fromHeader(req.Header, true)
 	} else {
@@ -189,7 +199,7 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 		}
 
 		// try load labels from server
-		if info.label == "" && info.uid != "" {
+		if c.loadLabels && info.label == "" && info.uid != "" {
 			labels := c.ls.MustLoadLabels(req.Context(), info.uid, req.Header.Get(headerXRequestID))
 			for _, l := range labels {
 				if !l.MatchClient(info.client) {
