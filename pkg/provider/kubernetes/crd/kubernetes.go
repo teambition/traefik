@@ -145,6 +145,7 @@ func (p *Provider) Provide(configurationChan chan<- dynamic.Message, pool *safe.
 					case p.lastConfiguration.Get() == confHash:
 						logger.Debugf("Skipping Kubernetes event kind %T", event)
 					default:
+						logger.Infof("Process Kubernetes event %T, hash %d", event, confHash)
 						p.lastConfiguration.Set(confHash)
 						configurationChan <- dynamic.Message{
 							ProviderName:  providerName,
@@ -225,6 +226,7 @@ func (p *Provider) loadConfigurationFromCRD(ctx context.Context, client Client) 
 			StripPrefixRegex:  middleware.Spec.StripPrefixRegex,
 			ReplacePath:       middleware.Spec.ReplacePath,
 			ReplacePathRegex:  middleware.Spec.ReplacePathRegex,
+			Canary:            middleware.Spec.Canary,
 			Chain:             createChainMiddleware(ctxMid, middleware.Namespace, middleware.Spec.Chain),
 			IPWhiteList:       middleware.Spec.IPWhiteList,
 			Headers:           middleware.Spec.Headers,
