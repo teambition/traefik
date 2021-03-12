@@ -18,3 +18,4 @@ cover.out
 vendor/
 plugins-storage/
 traefik_changelog.md
+debug/
