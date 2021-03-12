@@ -21,6 +21,7 @@ deepcopy-gen \
 --input-dirs github.com/traefik/traefik/${TRAEFIK_MODULE_VERSION}/pkg/config/dynamic \
 --input-dirs github.com/traefik/traefik/${TRAEFIK_MODULE_VERSION}/pkg/tls \
 --input-dirs github.com/traefik/traefik/${TRAEFIK_MODULE_VERSION}/pkg/types \
+--output-base ${REPO_ROOT}/../../.. \
 --output-package github.com/traefik/traefik \
 -O zz_generated.deepcopy --go-header-file "${HACK_DIR}"/boilerplate.go.tmpl
 

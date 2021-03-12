@@ -511,6 +511,7 @@ type Canary struct {
 	Product              string          `json:"product,omitempty" toml:"product,omitempty" yaml:"product,omitempty" export:"true"`
 	Server               string          `json:"server,omitempty" toml:"server,omitempty" yaml:"server,omitempty" export:"true"`
 	UIDCookies           []string        `json:"uidCookies,omitempty" toml:"uidCookies,omitempty" yaml:"uidCookies,omitempty" export:"true"`
+	RateLimitKey         []string        `json:"rateLimitKey,omitempty" toml:"rateLimitKey,omitempty" yaml:"rateLimitKey,omitempty" export:"true"`
 	ForwardLabel         bool            `json:"forwardLabel,omitempty" toml:"forwardLabel,omitempty" yaml:"forwardLabel,omitempty" export:"true"`
 	AddRequestID         bool            `json:"addRequestID,omitempty" toml:"addRequestID,omitempty" yaml:"addRequestID,omitempty" export:"true"`
 	CanaryResponseHeader bool            `json:"canaryResponseHeader,omitempty" toml:"canaryResponseHeader,omitempty" yaml:"canaryResponseHeader,omitempty" export:"true"`
@@ -520,6 +521,8 @@ type Canary struct {
 	Sticky               *Sticky         `json:"sticky,omitempty" toml:"sticky,omitempty" yaml:"sticky,omitempty" export:"true"`
 	LabelsMap            *LabelsMap      `json:"labelsMap,omitempty" toml:"labelsMap,omitempty" yaml:"labelsMap,omitempty" export:"true"`
 }
+
+// +k8s:deepcopy-gen=true
 
 // LabelsMap get canary labels from header with map
 type LabelsMap struct {

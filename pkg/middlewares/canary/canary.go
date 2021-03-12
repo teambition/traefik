@@ -42,6 +42,7 @@ type Canary struct {
 	name                 string
 	product              string
 	uidCookies           []string
+	rateLimitKey         []string
 	addRequestID         bool
 	forwardLabel         bool
 	canaryResponseHeader bool
@@ -84,6 +85,7 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Canary, name string
 		next:                 next,
 		product:              cfg.Product,
 		uidCookies:           cfg.UIDCookies,
+		rateLimitKey:         cfg.RateLimitKey,
 		loadLabels:           cfg.Server != "",
 		addRequestID:         cfg.AddRequestID,
 		forwardLabel:         cfg.ForwardLabel,
@@ -218,9 +220,44 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	rateLimitKey := ""
+	if len(c.rateLimitKey) > 0 {
+		keys := make([]string, 0, len(c.rateLimitKey))
+		for _, k := range c.rateLimitKey {
+			switch k {
+			case "UID":
+				keys = append(keys, info.uid)
+			case "Method":
+				keys = append(keys, req.Method)
+			case "Path":
+				keys = append(keys, req.URL.Path)
+			case "Host":
+				keys = append(keys, req.Host)
+			default:
+				if v := req.Header.Get(k); v != "" {
+					keys = append(keys, v)
+				}
+			}
+		}
+		if len(keys) == 0 {
+			if v := req.Header.Get("X-Real-Ip"); v != "" {
+				keys = append(keys, v)
+			} else if clientIP, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+				keys = append(keys, clientIP)
+			} else {
+				keys = append(keys, req.URL.String())
+			}
+		}
+		rateLimitKey = strings.Join(keys, ":")
+		req.Header.Set("X-Ratelimit-Key", rateLimitKey)
+	}
+
 	if logData := accesslog.GetLogData(req); logData != nil {
 		logData.Core["UID"] = info.uid
 		logData.Core["XCanary"] = info.String()
+		if rateLimitKey != "" {
+			logData.Core["XRateLimitKey"] = rateLimitKey
+		}
 	}
 }
 
