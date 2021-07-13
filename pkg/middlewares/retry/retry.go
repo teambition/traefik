@@ -81,6 +81,18 @@ func (r *retry) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		req.Body = io.NopCloser(body)
 	}
 
+	// fixed: http2: Transport: cannot retry err [http2: Transport received Server's graceful shutdown GOAWAY]
+	// after Request.Body was written; define Request.GetBody to avoid this error
+	// outReq.Body should not be a large stream!
+	if req.Body != nil && req.Body != http.NoBody && req.GetBody == nil {
+		rbody := newReReadCloser(req.Body)
+		req.Body = rbody
+		req.GetBody = func() (io.ReadCloser, error) {
+			rbody.Reset()
+			return rbody, nil
+		}
+	}
+
 	attempts := 1
 	backOff := r.newBackOff()
 	currentInterval := 0 * time.Millisecond
@@ -94,10 +106,10 @@ func (r *retry) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			// Disable retries when the backend already received request data
 			trace := &httptrace.ClientTrace{
 				WroteHeaders: func() {
-					retryResponseWriter.DisableRetries()
+					retryResponseWriter.RequestSent()
 				},
 				WroteRequest: func(httptrace.WroteRequestInfo) {
-					retryResponseWriter.DisableRetries()
+					retryResponseWriter.RequestSent()
 				},
 			}
 			newCtx := httptrace.WithClientTrace(req.Context(), trace)
@@ -153,6 +165,7 @@ type responseWriter interface {
 	http.Flusher
 	ShouldRetry() bool
 	DisableRetries()
+	RequestSent()
 }
 
 func newResponseWriter(rw http.ResponseWriter, shouldRetry bool) responseWriter {
@@ -173,6 +186,7 @@ type responseWriterWithoutCloseNotify struct {
 	responseWriter http.ResponseWriter
 	headers        http.Header
 	shouldRetry    bool
+	requestSent    bool
 	written        bool
 }
 
@@ -182,6 +196,10 @@ func (r *responseWriterWithoutCloseNotify) ShouldRetry() bool {
 
 func (r *responseWriterWithoutCloseNotify) DisableRetries() {
 	r.shouldRetry = false
+}
+
+func (r *responseWriterWithoutCloseNotify) RequestSent() {
+	r.requestSent = true
 }
 
 func (r *responseWriterWithoutCloseNotify) Header() http.Header {
@@ -199,7 +217,7 @@ func (r *responseWriterWithoutCloseNotify) Write(buf []byte) (int, error) {
 }
 
 func (r *responseWriterWithoutCloseNotify) WriteHeader(code int) {
-	if r.ShouldRetry() && code == http.StatusServiceUnavailable {
+	if code == http.StatusServiceUnavailable || (r.requestSent && code != http.StatusBadGateway) {
 		// We get a 503 HTTP Status Code when there is no backend server in the pool
 		// to which the request could be sent.  Also, note that r.ShouldRetry()
 		// will never return true in case there was a connection established to
@@ -245,4 +263,39 @@ type responseWriterWithCloseNotify struct {
 
 func (r *responseWriterWithCloseNotify) CloseNotify() <-chan bool {
 	return r.responseWriter.(http.CloseNotifier).CloseNotify()
+}
+
+type reReadCloser struct {
+	s    io.ReadCloser
+	buf  []byte
+	read int // buf read position
+}
+
+func newReReadCloser(s io.ReadCloser) *reReadCloser {
+	return &reReadCloser{
+		s:   s,
+		buf: make([]byte, 0),
+	}
+}
+
+func (r *reReadCloser) Read(p []byte) (n int, err error) {
+	if len(r.buf) > r.read {
+		n = copy(p, r.buf[r.read:])
+		r.read += n
+		return
+	}
+	n, err = r.s.Read(p)
+	if n > 0 {
+		r.buf = append(r.buf, p[:n]...)
+		r.read += n
+	}
+	return
+}
+
+func (r *reReadCloser) Reset() {
+	r.read = 0
+}
+
+func (r *reReadCloser) Close() error {
+	return r.s.Close()
 }

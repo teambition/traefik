@@ -32,6 +32,182 @@ spec:
           spec:
             description: ServiceSpec defines whether a TraefikService is a load-balancer of services or a mirroring service.
             properties:
+              labeled:
+                description: LabeledRoundRobin defines a labeled load-balancer of services, which select service by label. Label will be extract from request header or cookie, with key `X-Canary`. services should be named as `{defaultService}-{label}`. Ex. "myservice-stable", "myservice-beta", "myservice-dev"
+                properties:
+                  kind:
+                    enum:
+                    - Service
+                    - TraefikService
+                    type: string
+                  name:
+                    description: Name is a reference to a Kubernetes Service object (for a load-balancer of servers), or to a TraefikService object (service load-balancer, mirroring, etc). The differentiation between the two is specified in the Kind field.
+                    type: string
+                  namespace:
+                    type: string
+                  passHostHeader:
+                    type: boolean
+                  port:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    x-kubernetes-int-or-string: true
+                  responseForwarding:
+                    description: ResponseForwarding holds configuration for the forward of the response.
+                    properties:
+                      flushInterval:
+                        type: string
+                    type: object
+                  scheme:
+                    type: string
+                  serversTransport:
+                    type: string
+                  services:
+                    items:
+                      description: Service defines an upstream to proxy traffic.
+                      properties:
+                        kind:
+                          enum:
+                          - Service
+                          - TraefikService
+                          type: string
+                        name:
+                          description: Name is a reference to a Kubernetes Service object (for a load-balancer of servers), or to a TraefikService object (service load-balancer, mirroring, etc). The differentiation between the two is specified in the Kind field.
+                          type: string
+                        namespace:
+                          type: string
+                        passHostHeader:
+                          type: boolean
+                        port:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          x-kubernetes-int-or-string: true
+                        responseForwarding:
+                          description: ResponseForwarding holds configuration for the forward of the response.
+                          properties:
+                            flushInterval:
+                              type: string
+                          type: object
+                        scheme:
+                          type: string
+                        serversTransport:
+                          type: string
+                        sticky:
+                          description: Sticky holds the sticky configuration.
+                          properties:
+                            cookie:
+                              description: Cookie holds the sticky configuration based on cookie.
+                              properties:
+                                httpOnly:
+                                  type: boolean
+                                name:
+                                  type: string
+                                sameSite:
+                                  type: string
+                                secure:
+                                  type: boolean
+                              type: object
+                          type: object
+                        strategy:
+                          type: string
+                        weight:
+                          description: Weight should only be specified when Name references a TraefikService object (and to be precise, one that embeds a Weighted Round Robin).
+                          type: integer
+                      required:
+                      - name
+                      type: object
+                    type: array
+                  sticky:
+                    description: Sticky holds the sticky configuration.
+                    properties:
+                      cookie:
+                        description: Cookie holds the sticky configuration based on cookie.
+                        properties:
+                          httpOnly:
+                            type: boolean
+                          name:
+                            type: string
+                          sameSite:
+                            type: string
+                          secure:
+                            type: boolean
+                        type: object
+                    type: object
+                  strategy:
+                    type: string
+                  weight:
+                    description: Weight should only be specified when Name references a TraefikService object (and to be precise, one that embeds a Weighted Round Robin).
+                    type: integer
+                required:
+                - name
+                type: object
+              loadBalancer:
+                description: ServersLoadBalancer holds the ServersLoadBalancer configuration.
+                properties:
+                  healthCheck:
+                    description: HealthCheck holds the HealthCheck configuration.
+                    properties:
+                      followRedirects:
+                        type: boolean
+                      headers:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      hostname:
+                        type: string
+                      interval:
+                        description: FIXME change string to ptypes.Duration
+                        type: string
+                      path:
+                        type: string
+                      port:
+                        type: integer
+                      scheme:
+                        type: string
+                      timeout:
+                        description: FIXME change string to ptypes.Duration
+                        type: string
+                    required:
+                    - followRedirects
+                    type: object
+                  passHostHeader:
+                    type: boolean
+                  responseForwarding:
+                    description: ResponseForwarding holds configuration for the forward of the response.
+                    properties:
+                      flushInterval:
+                        type: string
+                    type: object
+                  servers:
+                    items:
+                      description: Server holds the server configuration.
+                      properties:
+                        url:
+                          type: string
+                      type: object
+                    type: array
+                  serversTransport:
+                    type: string
+                  sticky:
+                    description: Sticky holds the sticky configuration.
+                    properties:
+                      cookie:
+                        description: Cookie holds the sticky configuration based on cookie.
+                        properties:
+                          httpOnly:
+                            type: boolean
+                          name:
+                            type: string
+                          sameSite:
+                            type: string
+                          secure:
+                            type: boolean
+                        type: object
+                    type: object
+                required:
+                - passHostHeader
+                type: object
               mirroring:
                 description: Mirroring defines a mirroring service, which is composed of a main load-balancer, and a list of mirrors.
                 properties:

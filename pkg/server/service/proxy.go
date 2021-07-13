@@ -81,7 +81,7 @@ func buildProxy(passHostHeader *bool, responseForwarding *dynamic.ResponseForwar
 		FlushInterval: time.Duration(flushInterval),
 		BufferPool:    bufferPool,
 		ErrorHandler: func(w http.ResponseWriter, request *http.Request, err error) {
-			statusCode := http.StatusInternalServerError
+			statusCode := http.StatusBadGateway
 
 			switch {
 			case errors.Is(err, io.EOF):
@@ -93,13 +93,11 @@ func buildProxy(passHostHeader *bool, responseForwarding *dynamic.ResponseForwar
 				if errors.As(err, &netErr) {
 					if netErr.Timeout() {
 						statusCode = http.StatusGatewayTimeout
-					} else {
-						statusCode = http.StatusBadGateway
 					}
 				}
 			}
 
-			if statusCode > 500 {
+			if statusCode >= 500 {
 				log.Warnf("Error proxying: %d, xRequestID: %s, host: %s, url: %s, caused by: %v",
 					statusCode, request.Header.Get("X-Request-ID"), request.Host, request.URL.String(), err)
 			}

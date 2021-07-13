@@ -120,26 +120,25 @@ func (c *Canary) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 func (c *Canary) processRequestID(rw http.ResponseWriter, req *http.Request) {
-	requestID := req.Header.Get(headerXRequestID)
-	if requestID == "" {
-		requestID = req.Header.Get("X-CA-Request-Id")
+	requestIDs := make([]string, 0)
+	if v := req.Header.Get(headerXRequestID); len(v) > 0 {
+		requestIDs = append(requestIDs, v)
 	}
-	if requestID == "" {
-		requestID = req.Header.Get("Request-Id")
+	if v := req.Header.Get("eagleeye-traceid"); len(v) > 0 {
+		requestIDs = append(requestIDs, v)
 	}
+	if v := req.Header.Get("traceparent"); len(v) >= 55 {
+		// extract trace-id as x-request-id
+		// https://www.w3.org/TR/trace-context/#traceparent-header
+		requestIDs = append(requestIDs, v[3:35])
+	}
+	if len(requestIDs) == 0 {
+		requestIDs = append(requestIDs, generatorUUID())
+	}
+
+	requestID := strings.Join(requestIDs, ", ")
+	req.Header.Set(headerXRequestID, requestID)
 	if c.addRequestID {
-		if requestID == "" {
-			// extract trace-id as x-request-id
-			// https://www.w3.org/TR/trace-context/#traceparent-header
-			if traceparent := req.Header.Get("traceparent"); len(traceparent) >= 55 {
-				requestID = traceparent[3:35]
-			} else if traceid := req.Header.Get("eagleeye-traceid"); len(traceid) > 0 {
-				requestID = traceid
-			} else {
-				requestID = generatorUUID()
-			}
-			req.Header.Set(headerXRequestID, requestID)
-		}
 		rw.Header().Set(headerXRequestID, requestID)
 	}
 
@@ -185,7 +184,16 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 		}
 
 		info.product = c.product
-		info.uid = extractUserID(req, c.uidCookies)
+		if uid := extractUserID(req, c.uidCookies); len(uid) > 0 {
+			info.uid = uid
+		}
+		if info.uid == "" {
+			if uid := req.Header.Get("X-Forwarded-User-Id"); len(uid) > 0 {
+				info.uid = uid
+			} else if uid := req.URL.Query().Get("uid"); len(uid) > 0 {
+				info.uid = uid
+			}
+		}
 
 		// anonymous user
 		if info.uid == "" && c.sticky != nil {
@@ -226,7 +234,9 @@ func (c *Canary) processCanary(rw http.ResponseWriter, req *http.Request) {
 		for _, k := range c.rateLimitKey {
 			switch k {
 			case "UID":
-				keys = append(keys, info.uid)
+				if info.uid != "" {
+					keys = append(keys, info.uid)
+				}
 			case "Method":
 				keys = append(keys, req.Method)
 			case "Path":
@@ -267,7 +277,6 @@ func (c *Canary) addSticky(id string, rw http.ResponseWriter) {
 			Name:     c.sticky.Cookie.Name,
 			Value:    base64.RawURLEncoding.EncodeToString(data),
 			Path:     "/",
-			MaxAge:   60 * 60 * 24 * 7,
 			Secure:   c.sticky.Cookie.Secure,
 			HttpOnly: c.sticky.Cookie.HTTPOnly,
 			SameSite: convertSameSite(c.sticky.Cookie.SameSite),
@@ -438,11 +447,10 @@ func (ch *canaryHeader) feed(vals []string, trust bool) {
 
 // label should not be empty
 func (ch *canaryHeader) String() string {
-	if ch.label == "" {
-		return ""
+	vals := make([]string, 0, 3)
+	if ch.label != "" {
+		vals = append(vals, fmt.Sprintf("label=%s", ch.label))
 	}
-	vals := make([]string, 0, 4)
-	vals = append(vals, fmt.Sprintf("label=%s", ch.label))
 	if ch.product != "" {
 		vals = append(vals, fmt.Sprintf("product=%s", ch.product))
 	}
@@ -471,7 +479,7 @@ func (ch *canaryHeader) String() string {
 }
 
 func convertSameSite(sameSite string) http.SameSite {
-	switch sameSite {
+	switch strings.ToLower(sameSite) {
 	case "none":
 		return http.SameSiteNoneMode
 	case "lax":
@@ -479,7 +487,7 @@ func convertSameSite(sameSite string) http.SameSite {
 	case "strict":
 		return http.SameSiteStrictMode
 	default:
-		return 0
+		return http.SameSiteDefaultMode
 	}
 }
 

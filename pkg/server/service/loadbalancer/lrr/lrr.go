@@ -76,9 +76,9 @@ var isPortReg = regexp.MustCompile(`^\d+$`)
 
 // full service name format (build by fullServiceName function): namespace-serviceName-port
 func removeNsPort(fullServiceName, ServiceName string) string {
-	i := strings.Index(fullServiceName, ServiceName)
+	i := strings.Index(fullServiceName, "-"+ServiceName)
 	if i > 0 {
-		fullServiceName = fullServiceName[i:] // remove namespace
+		fullServiceName = fullServiceName[i+1:] // remove namespace
 	}
 	return strings.TrimRight(fullServiceName, "0123456789-") // remove port
 }
@@ -106,7 +106,7 @@ func extractLabel(header http.Header) (string, bool) {
 			label = v[6:]
 		case v == "nofallback":
 			fallback = false
-		case i == 0:
+		case i == 0 && strings.IndexByte(v, '=') == -1: // X-Canary: beta
 			label = v
 		}
 	}

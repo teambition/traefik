@@ -68,6 +68,60 @@ spec:
                   retryExpression:
                     type: string
                 type: object
+              canary:
+                description: Canary middleware settings.
+                properties:
+                  addRequestID:
+                    type: boolean
+                  cacheCleanDuration:
+                    type: Any
+                  cacheExpiration:
+                    type: Any
+                  canaryResponseHeader:
+                    type: boolean
+                  forwardLabel:
+                    type: boolean
+                  labelsMap:
+                    description: LabelsMap get canary labels from header with map
+                    properties:
+                      labels:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      requestHeaderName:
+                        type: string
+                    type: object
+                  maxCacheSize:
+                    type: integer
+                  product:
+                    type: string
+                  rateLimitKey:
+                    items:
+                      type: string
+                    type: array
+                  server:
+                    type: string
+                  sticky:
+                    description: Sticky holds the sticky configuration.
+                    properties:
+                      cookie:
+                        description: Cookie holds the sticky configuration based on cookie.
+                        properties:
+                          httpOnly:
+                            type: boolean
+                          name:
+                            type: string
+                          sameSite:
+                            type: string
+                          secure:
+                            type: boolean
+                        type: object
+                    type: object
+                  uidCookies:
+                    items:
+                      type: string
+                    type: array
+                type: object
               chain:
                 description: Chain holds a chain of middlewares.
                 properties:
@@ -347,6 +401,8 @@ spec:
                           type: string
                         type: array
                     type: object
+                  redirect:
+                    type: string
                   sourceRange:
                     items:
                       type: string

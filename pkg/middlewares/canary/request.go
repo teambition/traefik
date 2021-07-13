@@ -27,15 +27,16 @@ var userAgent string
 var tr = &http.Transport{
 	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	DialContext: (&net.Dialer{
-		Timeout:   3 * time.Second,
-		KeepAlive: 30 * time.Second,
+		Timeout:   5 * time.Second,
+		KeepAlive: 15 * time.Second,
 	}).DialContext,
 	ForceAttemptHTTP2:     true,
 	MaxIdleConns:          100,
-	MaxIdleConnsPerHost:   20,
-	IdleConnTimeout:       90 * time.Second,
+	MaxIdleConnsPerHost:   100,
+	IdleConnTimeout:       25 * time.Second,
 	TLSHandshakeTimeout:   3 * time.Second,
 	ExpectContinueTimeout: 1 * time.Second,
+	ResponseHeaderTimeout: 5 * time.Second,
 }
 
 var client = &http.Client{
@@ -108,7 +109,7 @@ func getUserLabels(ctx context.Context, api, xRequestID string) (*labelsRes, err
 		}
 
 		c := hc.CountFailure()
-		return nil, fmt.Errorf("xRequestId: %s, failures: %d, request error: %s", xRequestID, c, err.Error())
+		return nil, fmt.Errorf("xRequestId: %s, failures: %d, request error: %v", xRequestID, c, err)
 	}
 
 	hc.Reset()
@@ -122,8 +123,8 @@ func getUserLabels(ctx context.Context, api, xRequestID string) (*labelsRes, err
 
 	res := &labelsRes{}
 	if err = json.Unmarshal(respBody, res); err != nil {
-		return nil, fmt.Errorf("xRequestId: %s, getUserLabels Unmarshal error: %s, %s",
-			xRequestID, err.Error(), string(respBody))
+		return nil, fmt.Errorf("xRequestId: %s, getUserLabels Unmarshal error: %v, %s",
+			xRequestID, err, string(respBody))
 	}
 	return res, nil
 }
