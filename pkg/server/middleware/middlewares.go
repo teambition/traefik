@@ -9,9 +9,11 @@ import (
 
 	"github.com/containous/alice"
 	"github.com/traefik/traefik/v2/pkg/config/runtime"
+	"github.com/traefik/traefik/v2/pkg/middlewares/accesslog"
 	"github.com/traefik/traefik/v2/pkg/middlewares/addprefix"
 	"github.com/traefik/traefik/v2/pkg/middlewares/auth"
 	"github.com/traefik/traefik/v2/pkg/middlewares/buffering"
+	"github.com/traefik/traefik/v2/pkg/middlewares/canary"
 	"github.com/traefik/traefik/v2/pkg/middlewares/chain"
 	"github.com/traefik/traefik/v2/pkg/middlewares/circuitbreaker"
 	"github.com/traefik/traefik/v2/pkg/middlewares/compress"
@@ -134,6 +136,16 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 		}
 		middleware = func(next http.Handler) (http.Handler, error) {
 			return buffering.New(ctx, next, *config.Buffering, middlewareName)
+		}
+	}
+
+	// canary
+	if config.Canary != nil {
+		if middleware != nil {
+			return nil, badConf
+		}
+		middleware = func(next http.Handler) (http.Handler, error) {
+			return canary.New(ctx, next, *config.Canary, middlewareName)
 		}
 	}
 
@@ -315,7 +327,7 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 		}
 		middleware = func(next http.Handler) (http.Handler, error) {
 			// FIXME missing metrics / accessLog
-			return retry.New(ctx, next, *config.Retry, retry.Listeners{}, middlewareName)
+			return retry.New(ctx, next, *config.Retry, &accesslog.SaveRetries{}, middlewareName)
 		}
 	}
 

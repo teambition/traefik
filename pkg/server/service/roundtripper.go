@@ -108,8 +108,8 @@ func createRoundTripper(cfg *dynamic.ServersTransport) (http.RoundTripper, error
 	}
 
 	dialer := &net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
+		Timeout:   5 * time.Second,
+		KeepAlive: 15 * time.Second,
 	}
 
 	if cfg.ForwardingTimeouts != nil {
@@ -120,8 +120,8 @@ func createRoundTripper(cfg *dynamic.ServersTransport) (http.RoundTripper, error
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           dialer.DialContext,
 		MaxIdleConnsPerHost:   cfg.MaxIdleConnsPerHost,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
+		IdleConnTimeout:       28 * time.Second,
+		TLSHandshakeTimeout:   3 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		ReadBufferSize:        64 * 1024,
 		WriteBufferSize:       64 * 1024,

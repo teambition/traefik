@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	typeName   = "RateLimiterType"
-	maxSources = 65536
+	typeName         = "RateLimiterType"
+	maxSources       = 65536
+	bucketTTLSeconds = int(60) * 10 // 10 minutes
 )
 
 // rateLimiter implements rate limiting and traffic shaping with a set of token buckets;
@@ -121,7 +122,7 @@ func (rl *rateLimiter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		bucket = rlSource.(*rate.Limiter)
 	} else {
 		bucket = rate.NewLimiter(rl.rate, int(rl.burst))
-		if err := rl.buckets.Set(source, bucket, int(rl.maxDelay)*10+1); err != nil {
+		if err := rl.buckets.Set(source, bucket, bucketTTLSeconds); err != nil {
 			logger.Errorf("could not insert bucket: %v", err)
 			http.Error(w, "could not insert bucket", http.StatusInternalServerError)
 			return
@@ -141,7 +142,9 @@ func (rl *rateLimiter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	time.Sleep(delay)
+	if delay > 0 {
+		time.Sleep(delay)
+	}
 	rl.next.ServeHTTP(w, r)
 }
 

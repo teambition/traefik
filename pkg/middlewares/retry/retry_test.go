@@ -1,6 +1,7 @@
 package retry
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -308,4 +309,68 @@ func TestRetryWebsocket(t *testing.T) {
 			assert.Equal(t, test.expectedRetryAttempts, retryListener.timesCalled)
 		})
 	}
+}
+
+func TestReReadCloser(t *testing.T) {
+	t.Run("read once", func(t *testing.T) {
+		a := assert.New(t)
+		body := bytes.NewBufferString("abcdefghijklmnopqrstuvwxyz")
+		rBody := newReReadCloser(io.NopCloser(body))
+		p := make([]byte, 10)
+		n, err := rBody.Read(p)
+		a.Nil(err)
+		a.Equal(10, n)
+		a.Equal(16, body.Len())
+		a.Equal([]byte("abcdefghij"), p)
+
+		n, err = rBody.Read(p)
+		a.Nil(err)
+		a.Equal(10, n)
+		a.Equal(6, body.Len())
+		a.Equal([]byte("klmnopqrst"), p)
+
+		n, err = rBody.Read(p)
+		a.Nil(err)
+		a.Equal(6, n)
+		a.Equal(0, body.Len())
+		a.Equal([]byte("uvwxyz"), p[:n])
+	})
+
+	t.Run("reread", func(t *testing.T) {
+		a := assert.New(t)
+		body := bytes.NewBufferString("abcdefghijklmnopqrstuvwxyz")
+		rBody := newReReadCloser(io.NopCloser(body))
+		p := make([]byte, 12)
+		n, err := rBody.Read(p)
+		a.Nil(err)
+		a.Equal(12, n)
+		a.Equal(14, body.Len())
+		a.Equal([]byte("abcdefghijkl"), p)
+
+		rBody.Reset()
+		p = make([]byte, 10)
+		n, err = rBody.Read(p)
+		a.Nil(err)
+		a.Equal(10, n)
+		a.Equal(14, body.Len())
+		a.Equal([]byte("abcdefghij"), p)
+
+		n, err = rBody.Read(p)
+		a.Nil(err)
+		a.Equal(2, n)
+		a.Equal(14, body.Len())
+		a.Equal([]byte("kl"), p[:n])
+
+		n, err = rBody.Read(p)
+		a.Nil(err)
+		a.Equal(10, n)
+		a.Equal(4, body.Len())
+		a.Equal([]byte("mnopqrstuv"), p)
+
+		n, err = rBody.Read(p)
+		a.Nil(err)
+		a.Equal(4, n)
+		a.Equal(0, body.Len())
+		a.Equal([]byte("wxyz"), p[:n])
+	})
 }

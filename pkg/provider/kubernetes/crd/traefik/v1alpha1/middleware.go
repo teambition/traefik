@@ -46,6 +46,7 @@ type MiddlewareSpec struct {
 	Retry             *Retry                         `json:"retry,omitempty"`
 	ContentType       *dynamic.ContentType           `json:"contentType,omitempty"`
 	Plugin            map[string]apiextensionv1.JSON `json:"plugin,omitempty"`
+	Canary            *dynamic.Canary                `json:"canary,omitempty"`
 }
 
 // +k8s:deepcopy-gen=true
